@@ -1155,8 +1155,29 @@ public partial class MainWindow : Window
             foreach (var g in glyphs)
             {
                 var glyph = g;
-                var b = new Button { Content = glyph, Width = 36, Height = 34, Padding = new Thickness(0), FontSize = 17 };
-                if (_clipartMono) b.FontFamily = new FontFamily("Segoe UI Symbol");
+                object content;
+                if (_clipartMono)
+                {
+                    content = new TextBlock
+                    {
+                        Text = glyph,
+                        FontSize = 17,
+                        FontFamily = new FontFamily("Segoe UI Symbol"),
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center
+                    };
+                }
+                else
+                {
+                    content = new global::Emoji.Wpf.TextBlock
+                    {
+                        Text = glyph,
+                        FontSize = 17,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center
+                    };
+                }
+                var b = new Button { Content = content, Width = 36, Height = 34, Padding = new Thickness(0) };
                 b.SetResourceReference(StyleProperty, "ToolBtn");
                 b.Click += (s, a) => InsertClipart(glyph);
                 wrap.Children.Add(b);
@@ -1169,23 +1190,75 @@ public partial class MainWindow : Window
     {
         ClipartPopup.IsOpen = false;
         var c = ViewCenterWorld();
-        var m = new NodeModel
+        NodeModel m;
+        if (_clipartMono)
         {
-            Kind = "Text",
-            Shape = "Rect",
-            Color = "#00FFFFFF",
-            Text = glyph,
-            FontSize = 44,
-            W = 96, H = 96,
-            X = c.X - 48, Y = c.Y - 48,
-            Align = "Center",
-            AutoFit = true
-        };
-        if (_clipartMono) m.Font = "Segoe UI Symbol";
+            m = new NodeModel
+            {
+                Kind = "Text",
+                Shape = "Rect",
+                Color = "#00FFFFFF",
+                Text = glyph,
+                FontSize = 44,
+                Font = "Segoe UI Symbol",
+                W = 96, H = 96,
+                X = c.X - 48, Y = c.Y - 48,
+                Align = "Center",
+                AutoFit = true
+            };
+        }
+        else
+        {
+            // WPF text can't render color emoji, so color clipart is rasterized
+            // once via Emoji.Wpf and inserted as an image (scales natively).
+            byte[] png;
+            try { png = RenderEmojiPng(glyph, 256); }
+            catch { png = null; }
+            if (png == null)
+            {
+                _clipartMono = true;
+                InsertClipart(glyph);
+                _clipartMono = false;
+                return;
+            }
+            m = new NodeModel
+            {
+                Kind = "Image",
+                Shape = "Rect",
+                Color = "#00FFFFFF",
+                ImageData = Convert.ToBase64String(png),
+                ImageFit = "Fit",
+                W = 96, H = 96,
+                X = c.X - 48, Y = c.Y - 48
+            };
+        }
         if (SnapCheck.IsChecked == true) { m.X = Snap(m.X); m.Y = Snap(m.Y); }
         var nv = CreateNodeVisual(m);
         SelectOnly(nv);
         MarkDirty();
+    }
+
+    static byte[] RenderEmojiPng(string glyph, int px)
+    {
+        var tb = new global::Emoji.Wpf.TextBlock
+        {
+            Text = glyph,
+            FontSize = px * 0.72,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var host = new Grid { Width = px, Height = px, Background = Brushes.Transparent };
+        host.Children.Add(tb);
+        host.Measure(new Size(px, px));
+        host.Arrange(new Rect(0, 0, px, px));
+        host.UpdateLayout();
+        var rtb = new RenderTargetBitmap(px, px, 96, 96, PixelFormats.Pbgra32);
+        rtb.Render(host);
+        var enc = new PngBitmapEncoder();
+        enc.Frames.Add(BitmapFrame.Create(rtb));
+        using var ms = new MemoryStream();
+        enc.Save(ms);
+        return ms.ToArray();
     }
 
     void CreateTextAt(Point center)
