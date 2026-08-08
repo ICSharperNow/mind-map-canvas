@@ -25,6 +25,7 @@ public class NodeModel
     public double H { get; set; } = 96;
     public string Text { get; set; } = "";
     public string Color { get; set; } = "#FFF9B1";
+    public string Shape { get; set; } = "Rect";
 }
 
 public class ConnectionModel
@@ -45,7 +46,8 @@ public class DocumentModel
 public class NodeVisual
 {
     public NodeModel Model;
-    public Border Border;
+    public Grid Root;
+    public Shape ShapeEl;
     public TextBlock Label;
     public TextBox Editor;
     public Thumb Grip;
@@ -77,6 +79,15 @@ public partial class MainWindow : Window
         "#A5D6A7", "#E6DFD3", "#E4E7EB", "#FFFFFF"
     };
 
+    static readonly (string Kind, string Icon, string Name)[] ShapeDefs =
+    {
+        ("Rect", "▭", "Rectangle"),
+        ("Ellipse", "⬭", "Ellipse"),
+        ("Diamond", "◇", "Diamond"),
+        ("Hexagon", "⬡", "Hexagon"),
+        ("Parallelogram", "▱", "Parallelogram"),
+    };
+
     static readonly SolidColorBrush AccentBrush = new(Color.FromRgb(0x4C, 0x6E, 0xF5));
     static readonly SolidColorBrush SoftBorderBrush = new(Color.FromArgb(0x30, 0x00, 0x00, 0x00));
     static readonly SolidColorBrush ConnBrush = new(Color.FromRgb(0x88, 0x95, 0xA7));
@@ -89,7 +100,7 @@ public partial class MainWindow : Window
     ConnectionVisual _selectedConn;
 
     bool _spaceDown, _panning, _draggingNodes, _rubberBanding, _movedDuringDrag;
-    Point _panMouseStart, _dragStartWorld, _rubberStart;
+    Point _panMouseStart, _dragStartWorld, _rubberStart, _lastWorldMouse;
     double _panXStart, _panYStart;
     readonly Dictionary<Guid, Point> _dragOrigins = new();
     Rectangle _rubberRect;
@@ -101,11 +112,15 @@ public partial class MainWindow : Window
     NodeVisual _linkHover;
     Line _linkPreview;
 
+    readonly List<NodeModel> _clipboardNodes = new();
+    readonly List<ConnectionModel> _clipboardConns = new();
+
     string _currentFile;
     bool _dirty;
     double _zoom = 1.0;
     int _zTop = 10;
     string _lastColor = "#FFF9B1";
+    string _lastShape = "Rect";
 
     public MainWindow()
     {
@@ -139,6 +154,19 @@ public partial class MainWindow : Window
             PaletteWrap.Children.Add(sw);
         }
         CurrentColorSwatch.Background = BrushFrom(_lastColor);
+
+        foreach (var def in ShapeDefs)
+        {
+            var kind = def.Kind;
+            var row = new Button { HorizontalContentAlignment = HorizontalAlignment.Left };
+            row.SetResourceReference(StyleProperty, "ToolBtn");
+            var content = new StackPanel { Orientation = Orientation.Horizontal };
+            content.Children.Add(new TextBlock { Text = def.Icon, Width = 22, TextAlignment = TextAlignment.Center });
+            content.Children.Add(new TextBlock { Text = def.Name, Margin = new Thickness(6, 0, 0, 0) });
+            row.Content = content;
+            row.Click += (s, a) => ChooseShape(kind);
+            ShapeList.Children.Add(row);
+        }
 
         ResetView();
 
@@ -297,7 +325,7 @@ public partial class MainWindow : Window
         Title = $"MindMap Canvas — {name}{(_dirty ? " *" : "")}";
     }
 
-    // ---------- Node creation ----------
+    // ---------- Shape & node creation ----------
 
     static double Snap(double v) => Math.Round(v / GridSize) * GridSize;
 
@@ -315,13 +343,71 @@ public partial class MainWindow : Window
         return new ControlTemplate(typeof(Thumb)) { VisualTree = factory };
     }
 
+    static Shape MakeShapeElement(string kind)
+    {
+        Shape s = kind switch
+        {
+            "Ellipse" => new Ellipse(),
+            "Diamond" => new Polygon
+            {
+                Points = new PointCollection { new(0.5, 0), new(1, 0.5), new(0.5, 1), new(0, 0.5) },
+                Stretch = Stretch.Fill
+            },
+            "Hexagon" => new Polygon
+            {
+                Points = new PointCollection { new(0.25, 0), new(0.75, 0), new(1, 0.5), new(0.75, 1), new(0.25, 1), new(0, 0.5) },
+                Stretch = Stretch.Fill
+            },
+            "Parallelogram" => new Polygon
+            {
+                Points = new PointCollection { new(0.2, 0), new(1, 0), new(0.8, 1), new(0, 1) },
+                Stretch = Stretch.Fill
+            },
+            _ => new Rectangle { RadiusX = 8, RadiusY = 8 },
+        };
+        s.StrokeThickness = 1;
+        s.Effect = new DropShadowEffect { BlurRadius = 10, ShadowDepth = 2, Direction = 270, Opacity = 0.18 };
+        return s;
+    }
+
+    void ShapeBtn_Click(object sender, RoutedEventArgs e) =>
+        ShapePopup.IsOpen = !ShapePopup.IsOpen;
+
+    void ChooseShape(string kind)
+    {
+        _lastShape = kind;
+        ShapeIcon.Text = ShapeDefs.First(d => d.Kind == kind).Icon;
+        ShapePopup.IsOpen = false;
+        bool any = false;
+        foreach (var id in _selected)
+        {
+            var nv = _nodes[id];
+            if (nv.Model.Shape == kind) continue;
+            nv.Model.Shape = kind;
+            SwapShape(nv);
+            any = true;
+        }
+        if (any) MarkDirty();
+    }
+
+    void SwapShape(NodeVisual nv)
+    {
+        int idx = nv.Root.Children.IndexOf(nv.ShapeEl);
+        var s = MakeShapeElement(nv.Model.Shape);
+        s.Fill = BrushFrom(nv.Model.Color);
+        nv.Root.Children.RemoveAt(idx);
+        nv.Root.Children.Insert(idx, s);
+        nv.ShapeEl = s;
+        RefreshNodeChrome(nv);
+    }
+
     NodeVisual CreateNodeVisual(NodeModel m)
     {
         var label = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
             FontSize = 14,
-            Margin = new Thickness(10),
+            Margin = new Thickness(12),
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Center,
             TextAlignment = TextAlignment.Center,
@@ -334,7 +420,7 @@ public partial class MainWindow : Window
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
             FontSize = 14,
-            Margin = new Thickness(6),
+            Margin = new Thickness(8),
             Background = Brushes.Transparent,
             Foreground = TextBrush,
             BorderThickness = new Thickness(0),
@@ -353,41 +439,35 @@ public partial class MainWindow : Window
             Template = CreateGripTemplate()
         };
 
-        var grid = new Grid();
-        grid.Children.Add(label);
-        grid.Children.Add(editor);
-        grid.Children.Add(grip);
+        var shape = MakeShapeElement(m.Shape);
+        shape.Fill = BrushFrom(m.Color);
+        shape.Stroke = SoftBorderBrush;
 
-        var border = new Border
-        {
-            Width = m.W,
-            Height = m.H,
-            Background = BrushFrom(m.Color),
-            BorderBrush = SoftBorderBrush,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(6),
-            Child = grid,
-            Effect = new DropShadowEffect { BlurRadius = 10, ShadowDepth = 2, Direction = 270, Opacity = 0.18 }
-        };
-        Canvas.SetLeft(border, m.X);
-        Canvas.SetTop(border, m.Y);
-        Panel.SetZIndex(border, ++_zTop);
+        var root = new Grid { Width = m.W, Height = m.H, Background = Brushes.Transparent };
+        root.Children.Add(shape);
+        root.Children.Add(label);
+        root.Children.Add(editor);
+        root.Children.Add(grip);
 
-        var nv = new NodeVisual { Model = m, Border = border, Label = label, Editor = editor, Grip = grip };
+        Canvas.SetLeft(root, m.X);
+        Canvas.SetTop(root, m.Y);
+        Panel.SetZIndex(root, ++_zTop);
 
-        // Side connector handles (Mural/Miro style): drag one onto another note to link.
+        var nv = new NodeVisual { Model = m, Root = root, ShapeEl = shape, Label = label, Editor = editor, Grip = grip };
+
+        // Side connector handles (Mural/Miro style): drag one onto another shape to link.
         foreach (Side side in Enum.GetValues<Side>())
         {
             var handle = MakeHandle(nv, side);
             nv.Handles.Add(handle);
-            grid.Children.Add(handle);
+            root.Children.Add(handle);
         }
 
-        border.MouseLeftButtonDown += (s, e) => Node_Down(nv, e);
-        border.MouseMove += (s, e) => Node_Move(nv, e);
-        border.MouseLeftButtonUp += (s, e) => Node_Up(nv, e);
-        border.MouseEnter += (s, e) => ShowHandles(nv, true);
-        border.MouseLeave += (s, e) =>
+        root.MouseLeftButtonDown += (s, e) => Node_Down(nv, e);
+        root.MouseMove += (s, e) => Node_Move(nv, e);
+        root.MouseLeftButtonUp += (s, e) => Node_Up(nv, e);
+        root.MouseEnter += (s, e) => ShowHandles(nv, true);
+        root.MouseLeave += (s, e) =>
         {
             if (!(_linking && _linkSource == nv)) ShowHandles(nv, false);
         };
@@ -400,17 +480,23 @@ public partial class MainWindow : Window
         miEdit.Click += (s, e) => BeginEdit(nv);
         var miDup = new MenuItem { Header = "Duplicate", InputGestureText = "Ctrl+D" };
         miDup.Click += (s, e) => { if (!_selected.Contains(nv.Model.Id)) SelectOnly(nv); DuplicateSelected(); };
+        var miCopy = new MenuItem { Header = "Copy", InputGestureText = "Ctrl+C" };
+        miCopy.Click += (s, e) => { if (!_selected.Contains(nv.Model.Id)) SelectOnly(nv); CopySelected(); };
+        var miCut = new MenuItem { Header = "Cut", InputGestureText = "Ctrl+X" };
+        miCut.Click += (s, e) => { if (!_selected.Contains(nv.Model.Id)) SelectOnly(nv); CutSelected(); };
         var miDel = new MenuItem { Header = "Delete", InputGestureText = "Del" };
         miDel.Click += (s, e) => { if (!_selected.Contains(nv.Model.Id)) SelectOnly(nv); DeleteSelected(); };
         menu.Items.Add(miEdit);
         menu.Items.Add(miDup);
+        menu.Items.Add(miCopy);
+        menu.Items.Add(miCut);
         menu.Items.Add(new Separator());
         menu.Items.Add(miDel);
-        border.ContextMenu = menu;
-        border.ContextMenuOpening += (s, e) => { if (!_selected.Contains(nv.Model.Id)) SelectOnly(nv); };
+        root.ContextMenu = menu;
+        root.ContextMenuOpening += (s, e) => { if (!_selected.Contains(nv.Model.Id)) SelectOnly(nv); };
 
         RefreshLabel(nv);
-        World.Children.Add(border);
+        World.Children.Add(root);
         _nodes[m.Id] = nv;
         return nv;
     }
@@ -422,13 +508,15 @@ public partial class MainWindow : Window
         {
             X = worldCenter.X - 84,
             Y = worldCenter.Y - 48,
-            Color = _lastColor
+            Color = _lastColor,
+            Shape = _lastShape
         };
         if (SnapCheck.IsChecked == true) { m.X = Snap(m.X); m.Y = Snap(m.Y); }
         var nv = CreateNodeVisual(m);
+        // Select but don't auto-edit: the new shape can be dragged into place
+        // right away; double-click it to start typing.
         SelectOnly(nv);
         MarkDirty();
-        BeginEdit(nv);
     }
 
     void AddNote_Click(object sender, RoutedEventArgs e)
@@ -479,7 +567,7 @@ public partial class MainWindow : Window
         {
             var nv = _nodes[id];
             nv.Model.Color = hex;
-            nv.Border.Background = BrushFrom(hex);
+            nv.ShapeEl.Fill = BrushFrom(hex);
             any = true;
         }
         if (any) MarkDirty();
@@ -490,8 +578,8 @@ public partial class MainWindow : Window
     void RefreshNodeChrome(NodeVisual nv)
     {
         bool highlighted = _selected.Contains(nv.Model.Id) || _linkHover == nv;
-        nv.Border.BorderBrush = highlighted ? AccentBrush : SoftBorderBrush;
-        nv.Border.BorderThickness = new Thickness(highlighted ? 2 : 1);
+        nv.ShapeEl.Stroke = highlighted ? AccentBrush : SoftBorderBrush;
+        nv.ShapeEl.StrokeThickness = highlighted ? 2 : 1;
         nv.Grip.Visibility = _selected.Contains(nv.Model.Id) ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -616,7 +704,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        Panel.SetZIndex(nv.Border, ++_zTop);
+        Panel.SetZIndex(nv.Root, ++_zTop);
         bool ctrl = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
         if (ctrl) ToggleSelect(nv);
         else if (!_selected.Contains(nv.Model.Id)) SelectOnly(nv);
@@ -629,13 +717,13 @@ public partial class MainWindow : Window
         _dragOrigins.Clear();
         foreach (var id in _selected)
             _dragOrigins[id] = new Point(_nodes[id].Model.X, _nodes[id].Model.Y);
-        nv.Border.CaptureMouse();
+        nv.Root.CaptureMouse();
         e.Handled = true;
     }
 
     void Node_Move(NodeVisual nv, MouseEventArgs e)
     {
-        if (!_draggingNodes || !nv.Border.IsMouseCaptured) return;
+        if (!_draggingNodes || !nv.Root.IsMouseCaptured) return;
         var p = e.GetPosition(World);
         double dx = p.X - _dragStartWorld.X, dy = p.Y - _dragStartWorld.Y;
         if (!_movedDuringDrag && Math.Abs(dx) < 2 && Math.Abs(dy) < 2) return;
@@ -649,8 +737,8 @@ public partial class MainWindow : Window
             if (snap) { nx = Snap(nx); ny = Snap(ny); }
             n.Model.X = nx;
             n.Model.Y = ny;
-            Canvas.SetLeft(n.Border, nx);
-            Canvas.SetTop(n.Border, ny);
+            Canvas.SetLeft(n.Root, nx);
+            Canvas.SetTop(n.Root, ny);
             UpdateConnectionsFor(kv.Key);
         }
         MarkDirty();
@@ -660,7 +748,7 @@ public partial class MainWindow : Window
     {
         if (!_draggingNodes) return;
         _draggingNodes = false;
-        if (nv.Border.IsMouseCaptured) nv.Border.ReleaseMouseCapture();
+        if (nv.Root.IsMouseCaptured) nv.Root.ReleaseMouseCapture();
         bool ctrl = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
         if (!_movedDuringDrag && !ctrl && _selected.Count > 1) SelectOnly(nv);
         e.Handled = true;
@@ -671,8 +759,8 @@ public partial class MainWindow : Window
         var m = nv.Model;
         m.W = Math.Max(NodeMinW, m.W + e.HorizontalChange);
         m.H = Math.Max(NodeMinH, m.H + e.VerticalChange);
-        nv.Border.Width = m.W;
-        nv.Border.Height = m.H;
+        nv.Root.Width = m.W;
+        nv.Root.Height = m.H;
         UpdateConnectionsFor(m.Id);
         MarkDirty();
     }
@@ -685,8 +773,8 @@ public partial class MainWindow : Window
             var n = _nodes[id];
             n.Model.X += dx;
             n.Model.Y += dy;
-            Canvas.SetLeft(n.Border, n.Model.X);
-            Canvas.SetTop(n.Border, n.Model.Y);
+            Canvas.SetLeft(n.Root, n.Model.X);
+            Canvas.SetTop(n.Root, n.Model.Y);
             UpdateConnectionsFor(id);
         }
         MarkDirty();
@@ -705,7 +793,7 @@ public partial class MainWindow : Window
             {
                 X = src.X + GridSize, Y = src.Y + GridSize,
                 W = src.W, H = src.H,
-                Text = src.Text, Color = src.Color
+                Text = src.Text, Color = src.Color, Shape = src.Shape
             };
             map[id] = m.Id;
             clones.Add(CreateNodeVisual(m));
@@ -714,6 +802,73 @@ public partial class MainWindow : Window
             AddConnection(map[c.Model.From], map[c.Model.To]);
         ClearSelection();
         foreach (var nv in clones)
+        {
+            _selected.Add(nv.Model.Id);
+            RefreshNodeChrome(nv);
+        }
+        MarkDirty();
+    }
+
+    // ---------- Clipboard ----------
+
+    void CopySelected()
+    {
+        CommitEdit();
+        if (_selected.Count == 0) return;
+        _clipboardNodes.Clear();
+        _clipboardConns.Clear();
+        foreach (var id in _selected)
+        {
+            var s = _nodes[id].Model;
+            _clipboardNodes.Add(new NodeModel
+            {
+                Id = s.Id, X = s.X, Y = s.Y, W = s.W, H = s.H,
+                Text = s.Text, Color = s.Color, Shape = s.Shape
+            });
+        }
+        foreach (var c in _conns)
+            if (_selected.Contains(c.Model.From) && _selected.Contains(c.Model.To))
+                _clipboardConns.Add(new ConnectionModel { From = c.Model.From, To = c.Model.To });
+    }
+
+    void CutSelected()
+    {
+        CopySelected();
+        DeleteSelected();
+    }
+
+    void Paste()
+    {
+        if (_clipboardNodes.Count == 0) return;
+        var b = Rect.Empty;
+        foreach (var n in _clipboardNodes) b.Union(new Rect(n.X, n.Y, n.W, n.H));
+
+        // Paste under the cursor when it's over the board, otherwise offset from the source.
+        Point target = Viewport.IsMouseOver
+            ? _lastWorldMouse
+            : new Point(b.X + b.Width / 2 + GridSize, b.Y + b.Height / 2 + GridSize);
+        double ox = target.X - (b.X + b.Width / 2);
+        double oy = target.Y - (b.Y + b.Height / 2);
+        bool snap = SnapCheck.IsChecked == true;
+
+        var map = new Dictionary<Guid, Guid>();
+        var created = new List<NodeVisual>();
+        foreach (var n in _clipboardNodes)
+        {
+            double nx = n.X + ox, ny = n.Y + oy;
+            if (snap) { nx = Snap(nx); ny = Snap(ny); }
+            var m = new NodeModel
+            {
+                X = nx, Y = ny, W = n.W, H = n.H,
+                Text = n.Text, Color = n.Color, Shape = n.Shape
+            };
+            map[n.Id] = m.Id;
+            created.Add(CreateNodeVisual(m));
+        }
+        foreach (var c in _clipboardConns)
+            AddConnection(map[c.From], map[c.To]);
+        ClearSelection();
+        foreach (var nv in created)
         {
             _selected.Add(nv.Model.Id);
             RefreshNodeChrome(nv);
@@ -746,7 +901,7 @@ public partial class MainWindow : Window
         if (!_nodes.TryGetValue(id, out var nv)) return;
         foreach (var cv in _conns.Where(c => c.Model.From == id || c.Model.To == id).ToList())
             RemoveConnectionVisual(cv);
-        World.Children.Remove(nv.Border);
+        World.Children.Remove(nv.Root);
         _nodes.Remove(id);
         if (_editing == nv) _editing = null;
         if (_linkSource == nv || _linkHover == nv) CancelLink();
@@ -774,7 +929,7 @@ public partial class MainWindow : Window
             Margin = margin,
             Cursor = Cursors.Cross,
             Visibility = Visibility.Collapsed,
-            ToolTip = "Drag onto another note to connect"
+            ToolTip = "Drag onto another shape to connect"
         };
         el.MouseLeftButtonDown += (s, e) => { StartLink(nv, side, el); e.Handled = true; };
         el.MouseMove += (s, e) => Link_Move(el, e);
@@ -846,7 +1001,7 @@ public partial class MainWindow : Window
         CancelLink();
         if (target != null && AddConnection(src.Model.Id, target.Model.Id) != null)
             MarkDirty();
-        if (!src.Border.IsMouseOver) ShowHandles(src, false);
+        if (!src.Root.IsMouseOver) ShowHandles(src, false);
         e.Handled = true;
     }
 
@@ -875,7 +1030,7 @@ public partial class MainWindow : Window
             if (p.X >= m.X - 8 && p.X <= m.X + m.W + 8 &&
                 p.Y >= m.Y - 8 && p.Y <= m.Y + m.H + 8)
             {
-                int z = Panel.GetZIndex(nv.Border);
+                int z = Panel.GetZIndex(nv.Root);
                 if (z >= bestZ) { bestZ = z; best = nv; }
             }
         }
@@ -935,12 +1090,10 @@ public partial class MainWindow : Window
     void UpdateConnectionVisual(ConnectionVisual cv)
     {
         if (!_nodes.TryGetValue(cv.Model.From, out var a) || !_nodes.TryGetValue(cv.Model.To, out var b)) return;
-        var ra = new Rect(a.Model.X, a.Model.Y, a.Model.W, a.Model.H);
-        var rb = new Rect(b.Model.X, b.Model.Y, b.Model.W, b.Model.H);
-        var ca = new Point(ra.X + ra.Width / 2, ra.Y + ra.Height / 2);
-        var cb = new Point(rb.X + rb.Width / 2, rb.Y + rb.Height / 2);
-        var p1 = EdgeIntersect(ra, ca, cb);
-        var p2 = EdgeIntersect(rb, cb, ca);
+        var ca = new Point(a.Model.X + a.Model.W / 2, a.Model.Y + a.Model.H / 2);
+        var cb = new Point(b.Model.X + b.Model.W / 2, b.Model.Y + b.Model.H / 2);
+        var p1 = EdgePointFor(a.Model, ca, cb);
+        var p2 = EdgePointFor(b.Model, cb, ca);
         var v = p2 - p1;
 
         bool visible = v.Length > 2;
@@ -958,6 +1111,28 @@ public partial class MainWindow : Window
         cv.Hit.X1 = p1.X; cv.Hit.Y1 = p1.Y;
         cv.Hit.X2 = p2.X; cv.Hit.Y2 = p2.Y;
         cv.Arrow.Points = new PointCollection { p2, tail + perp * 5, tail - perp * 5 };
+    }
+
+    // Arrows land on the actual shape outline for ellipses and diamonds,
+    // and on the bounding box for the rest.
+    static Point EdgePointFor(NodeModel m, Point from, Point to)
+    {
+        double dx = to.X - from.X, dy = to.Y - from.Y;
+        if (Math.Abs(dx) < 1e-9 && Math.Abs(dy) < 1e-9) return from;
+        double hw = m.W / 2, hh = m.H / 2;
+        double t;
+        switch (m.Shape)
+        {
+            case "Ellipse":
+                t = 1 / Math.Sqrt(dx * dx / (hw * hw) + dy * dy / (hh * hh));
+                break;
+            case "Diamond":
+                t = 1 / (Math.Abs(dx) / hw + Math.Abs(dy) / hh);
+                break;
+            default:
+                return EdgeIntersect(new Rect(m.X, m.Y, m.W, m.H), from, to);
+        }
+        return new Point(from.X + dx * t, from.Y + dy * t);
     }
 
     static Point EdgeIntersect(Rect r, Point from, Point to)
@@ -987,30 +1162,47 @@ public partial class MainWindow : Window
         }
 
         bool ctrl = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
-        if (!ctrl) ClearSelection();
+        bool shift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
 
-        _rubberBanding = true;
-        _rubberStart = e.GetPosition(World);
-        _rubberRect = new Rectangle
+        if (shift || ctrl)
         {
-            Width = 0, Height = 0,
-            Stroke = AccentBrush,
-            StrokeThickness = Math.Max(0.5, 1 / _zoom),
-            Fill = new SolidColorBrush(Color.FromArgb(0x20, 0x4C, 0x6E, 0xF5)),
-            StrokeDashArray = new DoubleCollection { 4, 3 },
-            IsHitTestVisible = false
-        };
-        Canvas.SetLeft(_rubberRect, _rubberStart.X);
-        Canvas.SetTop(_rubberRect, _rubberStart.Y);
-        Panel.SetZIndex(_rubberRect, 99999);
-        World.Children.Add(_rubberRect);
-        World.CaptureMouse();
+            // Box select (Ctrl keeps the existing selection).
+            if (!ctrl) ClearSelection();
+            _rubberBanding = true;
+            _rubberStart = e.GetPosition(World);
+            _rubberRect = new Rectangle
+            {
+                Width = 0, Height = 0,
+                Stroke = AccentBrush,
+                StrokeThickness = Math.Max(0.5, 1 / _zoom),
+                Fill = new SolidColorBrush(Color.FromArgb(0x20, 0x4C, 0x6E, 0xF5)),
+                StrokeDashArray = new DoubleCollection { 4, 3 },
+                IsHitTestVisible = false
+            };
+            Canvas.SetLeft(_rubberRect, _rubberStart.X);
+            Canvas.SetTop(_rubberRect, _rubberStart.Y);
+            Panel.SetZIndex(_rubberRect, 99999);
+            World.Children.Add(_rubberRect);
+            World.CaptureMouse();
+        }
+        else
+        {
+            // Plain drag on empty canvas pans the board.
+            ClearSelection();
+            _panning = true;
+            _panMouseStart = e.GetPosition(Viewport);
+            _panXStart = Pan.X;
+            _panYStart = Pan.Y;
+            Viewport.CaptureMouse();
+            UpdateCursor();
+        }
         e.Handled = true;
     }
 
     void World_MouseMove(object sender, MouseEventArgs e)
     {
         var p = e.GetPosition(World);
+        _lastWorldMouse = p;
 
         if (_rubberBanding && _rubberRect != null)
         {
@@ -1084,7 +1276,7 @@ public partial class MainWindow : Window
             (e.ChangedButton == MouseButton.Middle || e.ChangedButton == MouseButton.Left))
         {
             _panning = false;
-            Viewport.ReleaseMouseCapture();
+            if (Viewport.IsMouseCaptured) Viewport.ReleaseMouseCapture();
             UpdateCursor();
             e.Handled = true;
         }
@@ -1186,6 +1378,9 @@ public partial class MainWindow : Window
                 case Key.S: if (shift) SaveAs(); else Save(); e.Handled = true; break;
                 case Key.A: SelectAllNodes(); e.Handled = true; break;
                 case Key.D: DuplicateSelected(); e.Handled = true; break;
+                case Key.C: CopySelected(); e.Handled = true; break;
+                case Key.X: CutSelected(); e.Handled = true; break;
+                case Key.V: Paste(); e.Handled = true; break;
                 case Key.OemPlus:
                 case Key.Add: ZoomAtCenter(1.25); e.Handled = true; break;
                 case Key.OemMinus:
@@ -1230,7 +1425,7 @@ public partial class MainWindow : Window
         var b = ContentBounds(48);
         if (b.IsEmpty)
         {
-            ModernDialog.Show(this, "Export", "Nothing to export yet — add some notes first.", "OK");
+            ModernDialog.Show(this, "Export", "Nothing to export yet — add some shapes first.", "OK");
             return;
         }
 

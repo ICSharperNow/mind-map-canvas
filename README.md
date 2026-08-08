@@ -18,13 +18,18 @@ Or open the folder in Visual Studio 2022+ and press F5.
 
 ## Features
 
-- **Infinite canvas** with a snap grid, smooth zoom (10%–400%) and panning
-- **Sticky notes**: double-click the canvas to create, double-click a note to edit
-  (Enter commits, Shift+Enter inserts a newline, Esc cancels)
-- **Move & resize**: drag notes (grid snapping optional), resize via the corner grip
-- **Connections**: hover a note and drag one of the four side connector dots onto another
-  note to draw an arrow; click an arrow to select it, `Del` to remove
-- **Multi-select**: drag a box on empty canvas, Ctrl+click to toggle, Ctrl+A for all
+- **Infinite canvas** with a snap grid, smooth zoom (10%–400%), and direct panning —
+  just drag the empty canvas in any direction (middle-drag and Space+drag also work)
+- **Shapes**: rectangle, ellipse, diamond, hexagon, parallelogram — pick in the
+  Shape dropdown; double-click the canvas to place one, then drag it into position and
+  double-click it to type (Enter commits, Shift+Enter newline, Esc cancels)
+- **Move & resize**: drag shapes (grid snapping optional), resize via the corner grip
+- **Connections**: hover a shape and drag one of the four side connector dots onto another
+  shape to draw an arrow (arrows hug the true outline of ellipses and diamonds);
+  click an arrow to select it, `Del` to remove
+- **Copy / paste**: Ctrl+C / Ctrl+X / Ctrl+V (pastes under the cursor), plus context menu
+- **Multi-select**: Shift+drag a box on empty canvas (Ctrl+drag keeps existing selection),
+  Ctrl+click to toggle, Ctrl+A for all
 - **Colors**: 16-swatch palette plus a full custom color picker (hue strip,
   saturation/value area, hex input); applies to all selected notes and is reused for new ones
 - **Duplicate** (Ctrl+D) clones selected notes and the connections between them
@@ -39,14 +44,15 @@ Or open the folder in Visual Studio 2022+ and press F5.
 
 | Action | Input |
 |---|---|
-| Add note | Double-click canvas, or ＋ Note button |
-| Edit note | Double-click note |
-| Move note(s) | Drag |
-| Resize note | Drag bottom-right grip (visible when selected) |
-| Box select | Drag on empty canvas |
+| Add shape | Double-click canvas, or ＋ Note button |
+| Edit shape text | Double-click shape |
+| Move shape(s) | Drag |
+| Resize shape | Drag bottom-right grip (visible when selected) |
+| Box select | Shift+drag on empty canvas |
 | Toggle select | Ctrl+click |
-| Connect notes | Hover note, drag a side dot onto another note |
-| Pan | Middle-drag, or hold Space + drag |
+| Connect shapes | Hover shape, drag a side dot onto another shape |
+| Pan | Drag empty canvas, middle-drag, or Space + drag |
+| Copy / Cut / Paste | Ctrl+C / Ctrl+X / Ctrl+V |
 | Zoom | Mouse wheel (anchored at cursor), Ctrl +/−, Fit, 100% |
 | Nudge | Arrow keys (Shift = 1px steps) |
 | Delete | `Del` / `Backspace` |
