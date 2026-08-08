@@ -4,7 +4,7 @@
 
 # MindMap Canvas
 
-**A fast, themeable mind-mapping board for Windows** — built with C# / WPF.
+**A fast, themeable mind-mapping board for Windows** - built with C# / WPF.
 Sketch ideas on an infinite gridded canvas, snap shapes together with anchored
 connectors, and export the result anywhere.
 
@@ -23,16 +23,23 @@ connectors, and export the result anywhere.
 |:---:|:---:|
 | ![Light theme](docs/preview-light.png) | ![Dark theme](docs/preview-dark.png) |
 
-*(Slate and Sepia themes are also included — switch live in **Settings → Settings…**.)*
+*(Slate and Sepia themes are also included - switch live in **Settings → Settings…**.)*
 
 ## Install
 
-**Installer (recommended)** — grab `MindMapCanvas-Setup-x.y.z.msi` from the
+**Installer (recommended)** - grab `MindMapCanvas-Setup-x.y.z.msi` from the
 [latest release](https://github.com/ICSharperNow/mind-map-canvas/releases/latest)
 and run it. It installs to Program Files and adds Start-menu and desktop shortcuts.
 
-**Portable** — download `MindMapCanvas.exe` from the same release page and run it
+**Portable** - download `MindMapCanvas.exe` from the same release page and run it
 from anywhere. Fully self-contained: no .NET installation required.
+
+**Updating** - just run a newer installer over an existing install; it upgrades
+in place (each release carries a higher version number, which triggers the
+upgrade automatically). No need to uninstall first.
+
+**Uninstalling** - remove it like any Windows app: Settings > Apps > Installed apps >
+MindMap Canvas > Uninstall (or via Control Panel / `winget uninstall`).
 
 **From source**
 
@@ -49,8 +56,8 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
 
 ### Canvas
 - **Infinite board** with a layered grid (subtle minor lines, stronger major lines)
-- **Pan** by simply dragging empty canvas — or middle-drag / Space+drag
-- **Zoom** 10%–400% with the wheel, anchored at the cursor; Fit and 100% shortcuts
+- **Pan** by simply dragging empty canvas - or middle-drag / Space+drag
+- **Zoom** 10%-400% with the wheel, anchored at the cursor; Fit and 100% shortcuts
 - Window resizing keeps the view centered on the same spot
 - **Snap to grid** toggle for tidy layouts
 
@@ -65,7 +72,7 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
 
 ### Connections
 - Hover a shape to reveal **eight connector dots** (four sides + four corners)
-- Drag a dot onto another shape to draw an arrow — the connection **stays pinned to the
+- Drag a dot onto another shape to draw an arrow - the connection **stays pinned to the
   exact dots you chose** on both ends and follows the shapes as they move
 - Arrows hug the true outline of ellipses and diamonds
 - Click an arrow to select it; `Del` removes it
@@ -75,7 +82,7 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
 - Per-shape **font size, bold, italic, alignment, and text color** via the `Aa` dropdown
 
 ### Workflow
-- **Copy / Cut / Paste** (Ctrl+C/X/V) — pastes land under the cursor and keep the
+- **Copy / Cut / Paste** (Ctrl+C/X/V) - pastes land under the cursor and keep the
   connections between copied shapes
 - **Duplicate** (Ctrl+D), box-select (Shift+drag), select-all, multi-drag
 - **Save / Open** boards as human-readable JSON with an unsaved-changes guard
@@ -106,7 +113,7 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
 
 ## File format
 
-Boards are plain JSON — friendly to diffs and scripts:
+Boards are plain JSON - friendly to diffs and scripts:
 
 ```json
 {
@@ -123,7 +130,7 @@ Boards are plain JSON — friendly to diffs and scripts:
 }
 ```
 
-A ready-made example lives at [`docs/demo-board.json`](docs/demo-board.json) —
+A ready-made example lives at [`docs/demo-board.json`](docs/demo-board.json) -
 open it with **File → Open** or pass it on the command line.
 
 ## Building the installer

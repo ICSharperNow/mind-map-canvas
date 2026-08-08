@@ -88,7 +88,7 @@ public static class ThemeManager
 
     static DrawingBrush MakeGridBrush(Color bg, Color line)
     {
-        // Minor lines every 24px at low opacity, a stronger major line every 96px —
+        // Minor lines every 24px at low opacity, a stronger major line every 96px -
         // more structure than a flat grid, but softer overall.
         var minor = Color.FromArgb(0x42, line.R, line.G, line.B);
         var major = Color.FromArgb(0x7E, line.R, line.G, line.B);

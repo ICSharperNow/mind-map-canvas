@@ -411,7 +411,7 @@ public partial class MainWindow : Window
     void UpdateTitle()
     {
         var name = string.IsNullOrEmpty(_currentFile) ? "untitled" : IOPath.GetFileName(_currentFile);
-        Title = $"MindMap Canvas — {name}{(_dirty ? " *" : "")}";
+        Title = $"MindMap Canvas - {name}{(_dirty ? " *" : "")}";
     }
 
     // ---------- Shape & node creation ----------
@@ -685,7 +685,7 @@ public partial class MainWindow : Window
     {
         FontSizeLabel.Text = _selected.Count > 0
             ? Math.Round(_nodes[_selected.First()].Model.FontSize).ToString()
-            : "—";
+            : "-";
     }
 
     void ApplyTextFormat(Action<NodeModel> change)
@@ -1720,7 +1720,7 @@ public partial class MainWindow : Window
         var b = ContentBounds(48);
         if (b.IsEmpty)
         {
-            ModernDialog.Show(this, "Export", "Nothing to export yet — add some shapes first.", "OK");
+            ModernDialog.Show(this, "Export", "Nothing to export yet - add some shapes first.", "OK");
             return;
         }
 

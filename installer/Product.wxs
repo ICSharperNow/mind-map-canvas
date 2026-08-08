@@ -1,7 +1,7 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
     <Package Name="MindMap Canvas"
              Manufacturer="ICSharperNow"
-             Version="1.0.1"
+             Version="1.0.2"
              UpgradeCode="80298A68-2B8E-4179-B2BD-FC0B5BEA32B8"
              Language="1033"
              Compressed="yes">
