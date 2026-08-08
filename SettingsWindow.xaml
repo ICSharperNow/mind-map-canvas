@@ -13,19 +13,36 @@
         <Border.Effect>
             <DropShadowEffect BlurRadius="26" ShadowDepth="4" Opacity="0.32"/>
         </Border.Effect>
-        <StackPanel Margin="24,20,24,20" MinWidth="300">
+        <StackPanel Margin="24,20,24,20" Width="380">
             <Grid>
                 <TextBlock Text="Settings" FontSize="16" FontWeight="SemiBold"
                            Foreground="{DynamicResource Brush.Text}"/>
                 <Button Content="✕" HorizontalAlignment="Right" VerticalAlignment="Top"
                         Style="{StaticResource ToolBtn}" Padding="7,3" Click="Close_Click"/>
             </Grid>
+
             <TextBlock Text="THEME" FontSize="11" FontWeight="SemiBold" Opacity="0.8"
                        Foreground="{DynamicResource Brush.SubtleText}" Margin="0,16,0,6"/>
-            <StackPanel x:Name="ThemeList"/>
-            <TextBlock Text="Sticky-note colors are set per note and are not changed by the theme."
+            <WrapPanel x:Name="ThemeList"/>
+
+            <TextBlock Text="CANVAS" FontSize="11" FontWeight="SemiBold" Opacity="0.8"
+                       Foreground="{DynamicResource Brush.SubtleText}" Margin="0,16,0,6"/>
+            <CheckBox x:Name="GridCheck" Content="Show grid lines" FontSize="13" Margin="2,3"
+                      Foreground="{DynamicResource Brush.Text}"
+                      Checked="Grid_Toggled" Unchecked="Grid_Toggled"/>
+            <CheckBox x:Name="SnapDefCheck" Content="Snap to grid by default" FontSize="13" Margin="2,3"
+                      Foreground="{DynamicResource Brush.Text}"
+                      Checked="Snap_Toggled" Unchecked="Snap_Toggled"/>
+
+            <TextBlock Text="BEHAVIOR" FontSize="11" FontWeight="SemiBold" Opacity="0.8"
+                       Foreground="{DynamicResource Brush.SubtleText}" Margin="0,16,0,6"/>
+            <CheckBox x:Name="RememberCheck" Content="Remember last used shape and color" FontSize="13" Margin="2,3"
+                      Foreground="{DynamicResource Brush.Text}"
+                      Checked="Remember_Toggled" Unchecked="Remember_Toggled"/>
+
+            <TextBlock Text="Sticky-note colors are set per shape and are not changed by the theme."
                        FontSize="12" Foreground="{DynamicResource Brush.SubtleText}"
-                       TextWrapping="Wrap" Margin="0,12,0,0" MaxWidth="300"/>
+                       TextWrapping="Wrap" Margin="0,14,0,0"/>
         </StackPanel>
     </Border>
 </Window>

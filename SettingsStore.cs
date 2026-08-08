@@ -6,6 +6,12 @@ namespace MindMapCanvas;
 public class AppSettings
 {
     public string Theme { get; set; } = "Light";
+    public bool ShowGrid { get; set; } = true;
+    public bool SnapToGrid { get; set; } = true;
+    public bool RememberLastStyle { get; set; } = true;
+    public string LastColor { get; set; } = "#FFF9B1";
+    public string LastShape { get; set; } = "Rect";
+    public List<string> CustomColors { get; set; } = new();
 }
 
 public static class SettingsStore

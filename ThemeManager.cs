@@ -55,9 +55,53 @@ public static class ThemeManager
         Checked = C("#EAD9B8"), CheckedBorder = C("#B08D4F")
     };
 
-    public static IReadOnlyList<Theme> Themes { get; } = new[] { Light, Dark, Slate, Sepia };
+    public static readonly Theme Midnight = new()
+    {
+        Name = "Midnight",
+        WindowBg = C("#0D0F14"), PanelBg = C("#15181F"), PanelBorder = C("#262B36"),
+        Text = C("#D5DBE5"), SubtleText = C("#8A93A3"),
+        CanvasOuter = C("#07080B"), CanvasBg = C("#101318"), GridLine = C("#3A4354"),
+        Hover = C("#1E232D"), Pressed = C("#272E3A"),
+        Checked = C("#223052"), CheckedBorder = C("#5B8DEF")
+    };
+
+    public static readonly Theme Ocean = new()
+    {
+        Name = "Ocean",
+        WindowBg = C("#E8F1F5"), PanelBg = C("#F7FBFD"), PanelBorder = C("#CFE0E8"),
+        Text = C("#17394A"), SubtleText = C("#5B7A8A"),
+        CanvasOuter = C("#D9E8EF"), CanvasBg = C("#F2F9FC"), GridLine = C("#9FBECE"),
+        Hover = C("#E3EEF3"), Pressed = C("#D3E4EC"),
+        Checked = C("#CBE3F2"), CheckedBorder = C("#2C7DA0")
+    };
+
+    public static readonly Theme Forest = new()
+    {
+        Name = "Forest",
+        WindowBg = C("#17211B"), PanelBg = C("#1E2A23"), PanelBorder = C("#31423A"),
+        Text = C("#DCE8DF"), SubtleText = C("#93A89A"),
+        CanvasOuter = C("#101812"), CanvasBg = C("#1A241D"), GridLine = C("#40584A"),
+        Hover = C("#27352C"), Pressed = C("#2F4136"),
+        Checked = C("#2C4A38"), CheckedBorder = C("#55B380")
+    };
+
+    public static readonly Theme Rose = new()
+    {
+        Name = "Rose",
+        WindowBg = C("#F7ECEF"), PanelBg = C("#FCF6F8"), PanelBorder = C("#E8D3DA"),
+        Text = C("#4A2B36"), SubtleText = C("#8F6B78"),
+        CanvasOuter = C("#F0DFE5"), CanvasBg = C("#FBF3F6"), GridLine = C("#CBA4B2"),
+        Hover = C("#F2E4E9"), Pressed = C("#E9D6DD"),
+        Checked = C("#F0D4DE"), CheckedBorder = C("#C2557E")
+    };
+
+    public static IReadOnlyList<Theme> Themes { get; } =
+        new[] { Light, Dark, Slate, Sepia, Midnight, Ocean, Forest, Rose };
 
     public static Theme Current { get; private set; } = Light;
+
+    // When off, the board renders a plain background with no grid lines.
+    public static bool ShowGrid { get; set; } = true;
 
     public static Theme ByName(string name) =>
         Themes.FirstOrDefault(t => t.Name == name) ?? Light;
@@ -86,8 +130,14 @@ public static class ThemeManager
         return b;
     }
 
-    static DrawingBrush MakeGridBrush(Color bg, Color line)
+    static Brush MakeGridBrush(Color bg, Color line)
     {
+        if (!ShowGrid)
+        {
+            var plain = new SolidColorBrush(bg);
+            plain.Freeze();
+            return plain;
+        }
         // Minor lines every 24px at low opacity, a stronger major line every 96px -
         // more structure than a flat grid, but softer overall.
         var minor = Color.FromArgb(0x42, line.R, line.G, line.B);

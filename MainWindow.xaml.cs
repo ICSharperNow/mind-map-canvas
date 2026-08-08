@@ -99,10 +99,14 @@ public partial class MainWindow : Window
     static readonly (string Kind, string Icon, string Name)[] ShapeDefs =
     {
         ("Rect", "▭", "Rectangle"),
+        ("Pill", "▬", "Pill"),
         ("Ellipse", "⬭", "Ellipse"),
         ("Diamond", "◇", "Diamond"),
         ("Hexagon", "⬡", "Hexagon"),
         ("Parallelogram", "▱", "Parallelogram"),
+        ("Trapezoid", "⏢", "Trapezoid"),
+        ("Triangle", "△", "Triangle"),
+        ("Octagon", "◉", "Octagon"),
     };
 
     static readonly string[] TextPalette =
@@ -136,6 +140,10 @@ public partial class MainWindow : Window
     Side _linkSourceSide;
     NodeVisual _linkHover;
     Line _linkPreview;
+    Ellipse _anchorRing;
+
+    AppSettings _settings = new();
+    Point _canvasMenuPos;
 
     readonly List<NodeModel> _clipboardNodes = new();
     readonly List<ConnectionModel> _clipboardConns = new();
@@ -156,6 +164,15 @@ public partial class MainWindow : Window
 
     void Window_Loaded(object sender, RoutedEventArgs e)
     {
+        _settings = SettingsStore.Load();
+        SnapCheck.IsChecked = _settings.SnapToGrid;
+        if (_settings.RememberLastStyle)
+        {
+            if (!string.IsNullOrEmpty(_settings.LastColor)) _lastColor = _settings.LastColor;
+            if (ShapeDefs.Any(d => d.Kind == _settings.LastShape)) _lastShape = _settings.LastShape;
+            ShapeIcon.Text = ShapeDefs.First(d => d.Kind == _lastShape).Icon;
+        }
+
         foreach (var hex in Palette)
         {
             var color = hex;
@@ -247,6 +264,30 @@ public partial class MainWindow : Window
             TextColorWrap.Children.Add(sw);
         }
 
+        BuildRecentSwatches();
+
+        // Right-click menu for empty canvas: paste and quick actions.
+        var canvasMenu = new ContextMenu();
+        var miPaste = new MenuItem { Header = "Paste", InputGestureText = "Ctrl+V" };
+        miPaste.Click += (s, a) => PasteAt(_canvasMenuPos);
+        var miAddHere = new MenuItem { Header = "Add shape here" };
+        miAddHere.Click += (s, a) => CreateNoteAt(_canvasMenuPos);
+        var miSelAll = new MenuItem { Header = "Select all", InputGestureText = "Ctrl+A" };
+        miSelAll.Click += (s, a) => SelectAllNodes();
+        var miFit = new MenuItem { Header = "Zoom to fit" };
+        miFit.Click += (s, a) => ZoomToFit();
+        canvasMenu.Items.Add(miPaste);
+        canvasMenu.Items.Add(miAddHere);
+        canvasMenu.Items.Add(new Separator());
+        canvasMenu.Items.Add(miSelAll);
+        canvasMenu.Items.Add(miFit);
+        World.ContextMenu = canvasMenu;
+        World.ContextMenuOpening += (s, a) =>
+        {
+            _canvasMenuPos = Mouse.GetPosition(World);
+            miPaste.IsEnabled = _clipboardNodes.Count > 0;
+        };
+
         ResetView();
 
         var startupFile = ((App)Application.Current).StartupFile;
@@ -303,7 +344,7 @@ public partial class MainWindow : Window
     void SelectAll_Click(object sender, RoutedEventArgs e) => SelectAllNodes();
 
     void Settings_Click(object sender, RoutedEventArgs e) =>
-        new SettingsWindow { Owner = this }.ShowDialog();
+        new SettingsWindow(_settings, () => SnapCheck.IsChecked = _settings.SnapToGrid) { Owner = this }.ShowDialog();
 
     bool Save()
     {
@@ -460,6 +501,26 @@ public partial class MainWindow : Window
                 Points = new PointCollection { new(0.2, 0), new(1, 0), new(0.8, 1), new(0, 1) },
                 Stretch = Stretch.Fill
             },
+            "Pill" => new Rectangle { RadiusX = 200, RadiusY = 200 },
+            "Triangle" => new Polygon
+            {
+                Points = new PointCollection { new(0.5, 0), new(1, 1), new(0, 1) },
+                Stretch = Stretch.Fill
+            },
+            "Trapezoid" => new Polygon
+            {
+                Points = new PointCollection { new(0.22, 0), new(0.78, 0), new(1, 1), new(0, 1) },
+                Stretch = Stretch.Fill
+            },
+            "Octagon" => new Polygon
+            {
+                Points = new PointCollection
+                {
+                    new(0.3, 0), new(0.7, 0), new(1, 0.3), new(1, 0.7),
+                    new(0.7, 1), new(0.3, 1), new(0, 0.7), new(0, 0.3)
+                },
+                Stretch = Stretch.Fill
+            },
             _ => new Rectangle { RadiusX = 8, RadiusY = 8 },
         };
         s.StrokeThickness = 1;
@@ -484,6 +545,11 @@ public partial class MainWindow : Window
     void ChooseShape(string kind)
     {
         _lastShape = kind;
+        if (_settings.RememberLastStyle)
+        {
+            _settings.LastShape = kind;
+            SettingsStore.Save(_settings);
+        }
         ShapeIcon.Text = ShapeDefs.First(d => d.Kind == kind).Icon;
         RefreshShapeTiles();
         ShapePopup.IsOpen = false;
@@ -507,7 +573,33 @@ public partial class MainWindow : Window
         nv.Root.Children.RemoveAt(idx);
         nv.Root.Children.Insert(idx, s);
         nv.ShapeEl = s;
+        UpdateTextInsets(nv);
         RefreshNodeChrome(nv);
+    }
+
+    // Keep text inside the visible area of non-rectangular shapes.
+    static Thickness TextInsets(NodeModel m)
+    {
+        double w = m.W, h = m.H;
+        return m.Shape switch
+        {
+            "Ellipse" => new Thickness(w * 0.15, h * 0.13, w * 0.15, h * 0.13),
+            "Diamond" => new Thickness(w * 0.24, h * 0.24, w * 0.24, h * 0.24),
+            "Hexagon" => new Thickness(w * 0.20, h * 0.10, w * 0.20, h * 0.10),
+            "Parallelogram" => new Thickness(w * 0.22, h * 0.10, w * 0.22, h * 0.10),
+            "Pill" => new Thickness(w * 0.14, h * 0.10, w * 0.14, h * 0.10),
+            "Triangle" => new Thickness(w * 0.22, h * 0.42, w * 0.22, h * 0.06),
+            "Trapezoid" => new Thickness(w * 0.22, h * 0.10, w * 0.22, h * 0.08),
+            "Octagon" => new Thickness(w * 0.15, h * 0.12, w * 0.15, h * 0.12),
+            _ => new Thickness(12)
+        };
+    }
+
+    void UpdateTextInsets(NodeVisual nv)
+    {
+        var t = TextInsets(nv.Model);
+        nv.Label.Margin = t;
+        nv.Editor.Margin = t;
     }
 
     NodeVisual CreateNodeVisual(NodeModel m)
@@ -604,6 +696,7 @@ public partial class MainWindow : Window
         root.ContextMenu = menu;
         root.ContextMenuOpening += (s, e) => { if (!_selected.Contains(nv.Model.Id)) SelectOnly(nv); };
 
+        UpdateTextInsets(nv);
         ApplyTextStyle(nv);
         World.Children.Add(root);
         _nodes[m.Id] = nv;
@@ -753,12 +846,60 @@ public partial class MainWindow : Window
         catch { initial = Colors.LightYellow; }
         var dlg = new ColorPickerWindow(initial) { Owner = this };
         if (dlg.ShowDialog() == true)
-            ApplyColor($"#{dlg.SelectedColor.R:X2}{dlg.SelectedColor.G:X2}{dlg.SelectedColor.B:X2}");
+        {
+            var hex = $"#{dlg.SelectedColor.R:X2}{dlg.SelectedColor.G:X2}{dlg.SelectedColor.B:X2}";
+            RememberCustomColor(hex);
+            ApplyColor(hex);
+        }
+    }
+
+    void RememberCustomColor(string hex)
+    {
+        if (Palette.Contains(hex, StringComparer.OrdinalIgnoreCase)) return;
+        _settings.CustomColors.RemoveAll(c => string.Equals(c, hex, StringComparison.OrdinalIgnoreCase));
+        _settings.CustomColors.Insert(0, hex);
+        if (_settings.CustomColors.Count > 8)
+            _settings.CustomColors.RemoveRange(8, _settings.CustomColors.Count - 8);
+        SettingsStore.Save(_settings);
+        BuildRecentSwatches();
+    }
+
+    void BuildRecentSwatches()
+    {
+        RecentWrap.Children.Clear();
+        RecentLabel.Visibility = _settings.CustomColors.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var hex in _settings.CustomColors)
+        {
+            var color = hex;
+            var sw = new Border
+            {
+                Width = 22, Height = 22,
+                CornerRadius = new CornerRadius(6),
+                Background = BrushFrom(color),
+                BorderBrush = SoftBorderBrush,
+                BorderThickness = new Thickness(1),
+                Margin = new Thickness(2),
+                Cursor = Cursors.Hand,
+                ToolTip = color
+            };
+            sw.MouseLeftButtonDown += (s, a) =>
+            {
+                ApplyColor(color);
+                ColorPopup.IsOpen = false;
+                a.Handled = true;
+            };
+            RecentWrap.Children.Add(sw);
+        }
     }
 
     void ApplyColor(string hex)
     {
         _lastColor = hex;
+        if (_settings.RememberLastStyle)
+        {
+            _settings.LastColor = hex;
+            SettingsStore.Save(_settings);
+        }
         CurrentColorSwatch.Background = BrushFrom(hex);
         bool any = false;
         foreach (var id in _selected)
@@ -959,6 +1100,7 @@ public partial class MainWindow : Window
         m.H = Math.Max(NodeMinH, m.H + e.VerticalChange);
         nv.Root.Width = m.W;
         nv.Root.Height = m.H;
+        UpdateTextInsets(nv);
         UpdateConnectionsFor(m.Id);
         MarkDirty();
     }
@@ -1028,16 +1170,17 @@ public partial class MainWindow : Window
         DeleteSelected();
     }
 
-    void Paste()
+    void Paste() =>
+        PasteAt(Viewport.IsMouseOver ? _lastWorldMouse : (Point?)null);
+
+    void PasteAt(Point? at)
     {
         if (_clipboardNodes.Count == 0) return;
         var b = Rect.Empty;
         foreach (var n in _clipboardNodes) b.Union(new Rect(n.X, n.Y, n.W, n.H));
 
-        // Paste under the cursor when it's over the board, otherwise offset from the source.
-        Point target = Viewport.IsMouseOver
-            ? _lastWorldMouse
-            : new Point(b.X + b.Width / 2 + GridSize, b.Y + b.Height / 2 + GridSize);
+        // Paste centered on the requested point, otherwise offset from the source.
+        Point target = at ?? new Point(b.X + b.Width / 2 + GridSize, b.Y + b.Height / 2 + GridSize);
         double ox = target.X - (b.X + b.Width / 2);
         double oy = target.Y - (b.Y + b.Height / 2);
         bool snap = SnapCheck.IsChecked == true;
@@ -1188,8 +1331,6 @@ public partial class MainWindow : Window
     {
         if (!_linking || !handle.IsMouseCaptured) return;
         var p = e.GetPosition(World);
-        _linkPreview.X2 = p.X;
-        _linkPreview.Y2 = p.Y;
 
         var target = HitNode(p, _linkSource);
         if (target != _linkHover)
@@ -1199,6 +1340,47 @@ public partial class MainWindow : Window
             if (old != null) RefreshNodeChrome(old);
             if (target != null) RefreshNodeChrome(target);
         }
+
+        if (target != null)
+        {
+            // Preview the exact dot the connection will snap to.
+            var anchor = SideAnchorM(target.Model, Enum.Parse<Side>(NearestAnchor(target.Model, p)));
+            _linkPreview.X2 = anchor.X;
+            _linkPreview.Y2 = anchor.Y;
+            ShowAnchorRing(anchor);
+        }
+        else
+        {
+            _linkPreview.X2 = p.X;
+            _linkPreview.Y2 = p.Y;
+            HideAnchorRing();
+        }
+    }
+
+    void ShowAnchorRing(Point at)
+    {
+        if (_anchorRing == null)
+        {
+            _anchorRing = new Ellipse
+            {
+                Width = 20, Height = 20,
+                Stroke = AccentBrush,
+                StrokeThickness = 2.5,
+                Fill = new SolidColorBrush(Color.FromArgb(0x30, 0x4C, 0x6E, 0xF5)),
+                IsHitTestVisible = false
+            };
+            Panel.SetZIndex(_anchorRing, 99999);
+            World.Children.Add(_anchorRing);
+        }
+        Canvas.SetLeft(_anchorRing, at.X - 10);
+        Canvas.SetTop(_anchorRing, at.Y - 10);
+    }
+
+    void HideAnchorRing()
+    {
+        if (_anchorRing == null) return;
+        World.Children.Remove(_anchorRing);
+        _anchorRing = null;
     }
 
     void Link_Up(Ellipse handle, MouseButtonEventArgs e)
@@ -1220,6 +1402,7 @@ public partial class MainWindow : Window
 
     void CancelLink()
     {
+        HideAnchorRing();
         if (_linkPreview != null)
         {
             World.Children.Remove(_linkPreview);
@@ -1279,6 +1462,28 @@ public partial class MainWindow : Window
             SelectConnection(cv);
             e.Handled = true;
         };
+        cv.Hit.MouseRightButtonDown += (s, e) => SelectConnection(cv);
+
+        var connMenu = new ContextMenu();
+        var miReverse = new MenuItem { Header = "Reverse direction" };
+        miReverse.Click += (s, e) =>
+        {
+            (cv.Model.From, cv.Model.To) = (cv.Model.To, cv.Model.From);
+            (cv.Model.FromAnchor, cv.Model.ToAnchor) = (cv.Model.ToAnchor, cv.Model.FromAnchor);
+            UpdateConnectionVisual(cv);
+            MarkDirty();
+        };
+        var miDelConn = new MenuItem { Header = "Delete connection", InputGestureText = "Del" };
+        miDelConn.Click += (s, e) =>
+        {
+            RemoveConnectionVisual(cv);
+            MarkDirty();
+        };
+        connMenu.Items.Add(miReverse);
+        connMenu.Items.Add(new Separator());
+        connMenu.Items.Add(miDelConn);
+        cv.Hit.ContextMenu = connMenu;
+
         World.Children.Add(cv.Body);
         World.Children.Add(cv.Arrow);
         World.Children.Add(cv.Hit);

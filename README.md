@@ -62,18 +62,22 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
 - **Snap to grid** toggle for tidy layouts
 
 ### Shapes
-- Five shapes: **rectangle, ellipse, diamond, hexagon, parallelogram**, chosen from a
-  visual gallery with live previews
+- Nine shapes: **rectangle, pill, ellipse, diamond, hexagon, parallelogram, trapezoid,
+  triangle, octagon**, chosen from a visual gallery with live previews; text stays
+  neatly inside each shape's outline
 - **Double-click** the canvas to place a shape, or **Alt+drag** to draw one at exactly
   the size you want
 - Move by dragging, resize via the corner grip, nudge with arrow keys
 - **16-color palette plus a full HSV custom color picker** (hue strip,
-  saturation/value area, hex input)
+  saturation/value area, hex input); custom colors are remembered and appear
+  in the palette dropdown for reuse
 
 ### Connections
 - Hover a shape to reveal **eight connector dots** (four sides + four corners)
-- Drag a dot onto another shape to draw an arrow - the connection **stays pinned to the
-  exact dots you chose** on both ends and follows the shapes as they move
+- Drag a dot onto another shape to draw an arrow - while dragging, a ring previews the
+  exact dot it will snap to, and the connection **stays pinned to those dots** on both
+  ends as the shapes move
+- Right-click an arrow to reverse its direction or delete it
 - Arrows hug the true outline of ellipses and diamonds
 - Click an arrow to select it; `Del` removes it
 
@@ -87,7 +91,12 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
 - **Duplicate** (Ctrl+D), box-select (Shift+drag), select-all, multi-drag
 - **Save / Open** boards as human-readable JSON with an unsaved-changes guard
 - **Export** the whole board as **PNG, JPEG, PDF, BMP, or TIFF**
-- **Four themes** (Light, Dark, Slate, Sepia) applied live and remembered between runs
+- **Eight themes** (Light, Dark, Slate, Sepia, Midnight, Ocean, Forest, Rose) applied
+  live and remembered between runs
+- **Settings panel**: theme, grid visibility, default snap-to-grid, and whether the app
+  remembers your last-used shape and color
+- **Right-click menus everywhere**: shapes (edit/duplicate/copy/cut/delete), connections
+  (reverse/delete), and empty canvas (paste/add shape/select all/zoom to fit)
 
 ## Controls
 

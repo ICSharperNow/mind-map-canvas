@@ -7,8 +7,14 @@ namespace MindMapCanvas;
 
 public partial class SettingsWindow : Window
 {
-    public SettingsWindow()
+    readonly AppSettings _settings;
+    readonly Action _changed;
+    bool _loading = true;
+
+    public SettingsWindow(AppSettings settings, Action changed)
     {
+        _settings = settings;
+        _changed = changed;
         InitializeComponent();
 
         foreach (var t in ThemeManager.Themes)
@@ -19,8 +25,8 @@ public partial class SettingsWindow : Window
             foreach (var c in new[] { theme.PanelBg, theme.CanvasBg, theme.CheckedBorder })
                 swatches.Children.Add(new Border
                 {
-                    Width = 16, Height = 16,
-                    Margin = new Thickness(2, 0, 2, 0),
+                    Width = 14, Height = 14,
+                    Margin = new Thickness(1, 0, 1, 0),
                     CornerRadius = new CornerRadius(4),
                     BorderBrush = new SolidColorBrush(theme.PanelBorder),
                     BorderThickness = new Thickness(1),
@@ -30,7 +36,7 @@ public partial class SettingsWindow : Window
             var name = new TextBlock
             {
                 Text = theme.Name,
-                Margin = new Thickness(8, 0, 0, 0),
+                Margin = new Thickness(7, 0, 0, 0),
                 FontSize = 13,
                 VerticalAlignment = VerticalAlignment.Center
             };
@@ -44,19 +50,49 @@ public partial class SettingsWindow : Window
             {
                 GroupName = "theme",
                 Content = content,
+                Width = 176,
                 Margin = new Thickness(2, 4, 0, 4),
                 VerticalContentAlignment = VerticalAlignment.Center,
                 IsChecked = ThemeManager.Current == theme
             };
             rb.Checked += (s, e) =>
             {
+                if (_loading) return;
                 ThemeManager.Apply(theme);
-                var settings = SettingsStore.Load();
-                settings.Theme = theme.Name;
-                SettingsStore.Save(settings);
+                _settings.Theme = theme.Name;
+                SettingsStore.Save(_settings);
             };
             ThemeList.Children.Add(rb);
         }
+
+        GridCheck.IsChecked = _settings.ShowGrid;
+        SnapDefCheck.IsChecked = _settings.SnapToGrid;
+        RememberCheck.IsChecked = _settings.RememberLastStyle;
+        _loading = false;
+    }
+
+    void Grid_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        _settings.ShowGrid = GridCheck.IsChecked == true;
+        ThemeManager.ShowGrid = _settings.ShowGrid;
+        ThemeManager.Apply(ThemeManager.Current);
+        SettingsStore.Save(_settings);
+    }
+
+    void Snap_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        _settings.SnapToGrid = SnapDefCheck.IsChecked == true;
+        SettingsStore.Save(_settings);
+        _changed?.Invoke();
+    }
+
+    void Remember_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        _settings.RememberLastStyle = RememberCheck.IsChecked == true;
+        SettingsStore.Save(_settings);
     }
 
     void Window_Drag(object sender, MouseButtonEventArgs e)

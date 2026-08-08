@@ -81,6 +81,10 @@
                         </Border.Effect>
                         <StackPanel>
                             <WrapPanel x:Name="PaletteWrap" Width="208"/>
+                            <TextBlock x:Name="RecentLabel" Text="YOUR CUSTOM COLORS" FontSize="10" FontWeight="SemiBold"
+                                       Opacity="0.8" Foreground="{DynamicResource Brush.SubtleText}"
+                                       Margin="2,8,0,2" Visibility="Collapsed"/>
+                            <WrapPanel x:Name="RecentWrap" Width="208"/>
                             <Button Content="Custom color…" Style="{StaticResource ToolBtn}" Margin="0,8,0,0"
                                     HorizontalContentAlignment="Center" Click="CustomColor_Click"/>
                         </StackPanel>
@@ -108,8 +112,11 @@
                 </Popup>
 
                 <Button x:Name="TextBtn" Style="{StaticResource ToolBtn}" Click="TextBtn_Click"
-                        ToolTip="Text formatting (applies to selected shapes)">
-                    <TextBlock VerticalAlignment="Center"><Run Text="Aa"/><Run Text=" ▾"/></TextBlock>
+                        ToolTip="Change text size, style, alignment, and color of the selected shapes">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Aa" FontWeight="Bold" VerticalAlignment="Center"/>
+                        <TextBlock Text=" Format text ▾" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
                 </Button>
                 <Popup x:Name="TextPopup" PlacementTarget="{Binding ElementName=TextBtn}" Placement="Bottom"
                        StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
@@ -119,17 +126,24 @@
                         <Border.Effect>
                             <DropShadowEffect BlurRadius="18" ShadowDepth="3" Opacity="0.30"/>
                         </Border.Effect>
-                        <StackPanel MinWidth="224">
-                            <TextBlock Text="SIZE AND STYLE" FontSize="10" FontWeight="SemiBold" Opacity="0.8"
+                        <StackPanel MinWidth="230">
+                            <TextBlock Text="Format text" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource Brush.Text}"/>
+                            <TextBlock Text="Applies to every selected shape."
+                                       FontSize="11" Foreground="{DynamicResource Brush.SubtleText}" Margin="0,2,0,10"/>
+                            <TextBlock Text="TEXT SIZE" FontSize="10" FontWeight="SemiBold" Opacity="0.8"
                                        Foreground="{DynamicResource Brush.SubtleText}"/>
                             <StackPanel Orientation="Horizontal" Margin="0,4,0,10">
-                                <Button Style="{StaticResource ToolBtn}" Width="34" Padding="0,5" Content="A−" Click="FontMinus_Click" ToolTip="Smaller text"/>
+                                <Button Style="{StaticResource ToolBtn}" Width="38" Padding="0,5" Content="A−" Click="FontMinus_Click" ToolTip="Smaller text"/>
                                 <TextBlock x:Name="FontSizeLabel" Text="14" Width="34" TextAlignment="Center" VerticalAlignment="Center"
                                            FontSize="13" Foreground="{DynamicResource Brush.Text}"/>
-                                <Button Style="{StaticResource ToolBtn}" Width="34" Padding="0,5" Content="A+" Click="FontPlus_Click" ToolTip="Larger text"/>
-                                <Border Width="1" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
-                                <Button Style="{StaticResource ToolBtn}" Width="32" Padding="0,5" FontWeight="Bold" Content="B" Click="Bold_Click" ToolTip="Bold"/>
-                                <Button Style="{StaticResource ToolBtn}" Width="32" Padding="0,5" FontStyle="Italic" Content="I" Click="Italic_Click" ToolTip="Italic"/>
+                                <Button Style="{StaticResource ToolBtn}" Width="38" Padding="0,5" Content="A+" Click="FontPlus_Click" ToolTip="Larger text"/>
+                            </StackPanel>
+                            <TextBlock Text="STYLE" FontSize="10" FontWeight="SemiBold" Opacity="0.8"
+                                       Foreground="{DynamicResource Brush.SubtleText}"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,4,0,10">
+                                <Button Style="{StaticResource ToolBtn}" Width="60" Padding="0,5" FontWeight="Bold" Content="Bold" Click="Bold_Click" ToolTip="Toggle bold"/>
+                                <Button Style="{StaticResource ToolBtn}" Width="60" Padding="0,5" FontStyle="Italic" Content="Italic" Click="Italic_Click" ToolTip="Toggle italic"/>
                             </StackPanel>
                             <TextBlock Text="ALIGNMENT" FontSize="10" FontWeight="SemiBold" Opacity="0.8"
                                        Foreground="{DynamicResource Brush.SubtleText}"/>
