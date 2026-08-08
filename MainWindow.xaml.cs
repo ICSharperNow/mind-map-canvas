@@ -772,14 +772,25 @@ public partial class MainWindow : Window
 
     void SwapShape(NodeVisual nv)
     {
-        int idx = nv.Root.Children.IndexOf(nv.ShapeEl);
+        // The shape element lives in the content layer (which carries opacity),
+        // not directly in the root grid.
+        int idx = nv.Content.Children.IndexOf(nv.ShapeEl);
+        if (idx < 0) return;
         var s = MakeShapeElement(nv.Model.Shape);
         s.Fill = BrushFrom(nv.Model.Color);
-        nv.Root.Children.RemoveAt(idx);
-        nv.Root.Children.Insert(idx, s);
+        if (nv.Model.Kind == "Text") s.Effect = null;
+        nv.Content.Children.RemoveAt(idx);
+        nv.Content.Children.Insert(idx, s);
         nv.ShapeEl = s;
+        if (nv.Model.Shape == "Circle" && Math.Abs(nv.Model.W - nv.Model.H) > 0.1)
+        {
+            nv.Model.W = nv.Model.H = Math.Max(nv.Model.W, nv.Model.H);
+            nv.Root.Width = nv.Model.W;
+            nv.Root.Height = nv.Model.H;
+        }
         UpdateTextInsets(nv);
         UpdateHandlePositions(nv);
+        UpdateConnectionsFor(nv.Model.Id);
         RefreshNodeChrome(nv);
     }
 
