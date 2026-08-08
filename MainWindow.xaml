@@ -156,19 +156,19 @@
                             <TextBlock Text="STYLE" FontSize="10" FontWeight="SemiBold" Opacity="0.8"
                                        Foreground="{DynamicResource Brush.SubtleText}"/>
                             <StackPanel Orientation="Horizontal" Margin="0,4,0,10">
-                                <Button Style="{StaticResource ToolBtn}" Width="60" Padding="0,5" FontWeight="Bold" Content="Bold" Click="Bold_Click" ToolTip="Toggle bold"/>
-                                <Button Style="{StaticResource ToolBtn}" Width="60" Padding="0,5" FontStyle="Italic" Content="Italic" Click="Italic_Click" ToolTip="Toggle italic"/>
+                                <Button Style="{StaticResource ToolBtn}" Width="60" Padding="0,5" FontWeight="Bold" Content="Bold" Click="Bold_Click" MouseEnter="Bold_Preview" MouseLeave="Format_PreviewEnd" ToolTip="Toggle bold"/>
+                                <Button Style="{StaticResource ToolBtn}" Width="60" Padding="0,5" FontStyle="Italic" Content="Italic" Click="Italic_Click" MouseEnter="Italic_Preview" MouseLeave="Format_PreviewEnd" ToolTip="Toggle italic"/>
                             </StackPanel>
                             <TextBlock Text="ALIGNMENT" FontSize="10" FontWeight="SemiBold" Opacity="0.8"
                                        Foreground="{DynamicResource Brush.SubtleText}"/>
                             <StackPanel Orientation="Horizontal" Margin="0,4,0,10">
-                                <Button Style="{StaticResource ToolBtn}" Width="36" Padding="0,6" Click="AlignLeft_Click" ToolTip="Align left">
+                                <Button Style="{StaticResource ToolBtn}" Width="36" Padding="0,6" Click="AlignLeft_Click" MouseEnter="AlignLeft_Preview" MouseLeave="Format_PreviewEnd" ToolTip="Align left">
                                     <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE8E4;" FontSize="14"/>
                                 </Button>
-                                <Button Style="{StaticResource ToolBtn}" Width="36" Padding="0,6" Click="AlignCenter_Click" ToolTip="Align center">
+                                <Button Style="{StaticResource ToolBtn}" Width="36" Padding="0,6" Click="AlignCenter_Click" MouseEnter="AlignCenter_Preview" MouseLeave="Format_PreviewEnd" ToolTip="Align center">
                                     <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE8E3;" FontSize="14"/>
                                 </Button>
-                                <Button Style="{StaticResource ToolBtn}" Width="36" Padding="0,6" Click="AlignRight_Click" ToolTip="Align right">
+                                <Button Style="{StaticResource ToolBtn}" Width="36" Padding="0,6" Click="AlignRight_Click" MouseEnter="AlignRight_Preview" MouseLeave="Format_PreviewEnd" ToolTip="Align right">
                                     <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE8E2;" FontSize="14"/>
                                 </Button>
                             </StackPanel>

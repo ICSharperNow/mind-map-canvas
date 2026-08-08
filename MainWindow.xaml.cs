@@ -357,6 +357,16 @@ public partial class MainWindow : Window
                 ApplyTextFormat(m => m.TextColor = color);
                 a.Handled = true;
             };
+            sw.MouseEnter += (s, a) =>
+            {
+                var b = BrushFrom(color);
+                PreviewFormat(nv =>
+                {
+                    if (!string.IsNullOrWhiteSpace(nv.Model.Text)) nv.Label.Foreground = b;
+                    nv.Editor.Foreground = b;
+                });
+            };
+            sw.MouseLeave += Format_PreviewEnd;
             TextColorWrap.Children.Add(sw);
         }
 
@@ -784,7 +794,7 @@ public partial class MainWindow : Window
             FontSize = 14,
             Margin = new Thickness(12),
             VerticalAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
             TextAlignment = TextAlignment.Center,
             IsHitTestVisible = false
         };
@@ -1310,6 +1320,45 @@ public partial class MainWindow : Window
             ? Math.Round(nv.Model.FontSize).ToString()
             : "-";
     }
+
+    // Temporarily paints a formatting change on the selected shapes while the
+    // pointer hovers an option; MouseLeave restores the real style.
+    void PreviewFormat(Action<NodeVisual> apply)
+    {
+        foreach (var id in _selected)
+            if (_nodes.TryGetValue(id, out var nv))
+                apply(nv);
+    }
+
+    void Format_PreviewEnd(object sender, MouseEventArgs e)
+    {
+        foreach (var id in _selected)
+            if (_nodes.TryGetValue(id, out var nv))
+                ApplyTextStyle(nv);
+    }
+
+    void Bold_Preview(object sender, MouseEventArgs e)
+    {
+        if (_selected.Count == 0) return;
+        bool target = !_selected.All(id => _nodes.TryGetValue(id, out var n) && n.Model.Bold);
+        var w = target ? FontWeights.Bold : FontWeights.Normal;
+        PreviewFormat(nv => { nv.Label.FontWeight = w; nv.Editor.FontWeight = w; });
+    }
+
+    void Italic_Preview(object sender, MouseEventArgs e)
+    {
+        if (_selected.Count == 0) return;
+        bool target = !_selected.All(id => _nodes.TryGetValue(id, out var n) && n.Model.Italic);
+        var st = target ? FontStyles.Italic : FontStyles.Normal;
+        PreviewFormat(nv => { nv.Label.FontStyle = st; nv.Editor.FontStyle = st; });
+    }
+
+    void AlignPreview(TextAlignment a) =>
+        PreviewFormat(nv => { nv.Label.TextAlignment = a; nv.Editor.TextAlignment = a; });
+
+    void AlignLeft_Preview(object sender, MouseEventArgs e) => AlignPreview(TextAlignment.Left);
+    void AlignCenter_Preview(object sender, MouseEventArgs e) => AlignPreview(TextAlignment.Center);
+    void AlignRight_Preview(object sender, MouseEventArgs e) => AlignPreview(TextAlignment.Right);
 
     void ApplyTextFormat(Action<NodeModel> change)
     {
