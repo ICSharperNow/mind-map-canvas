@@ -2388,6 +2388,7 @@ public partial class MainWindow : Window
             (cv.Model.From, cv.Model.To) = (cv.Model.To, cv.Model.From);
             (cv.Model.FromAnchor, cv.Model.ToAnchor) = (cv.Model.ToAnchor, cv.Model.FromAnchor);
             UpdateConnectionVisual(cv);
+            ClearConnSelection();
             MarkDirty();
         };
         var miDelConn = new MenuItem { Header = "Delete connection", InputGestureText = "Del" };
