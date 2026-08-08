@@ -51,11 +51,19 @@ public class ConnectionModel
     public string ToAnchor { get; set; }
 }
 
+public class CellModel
+{
+    public int X { get; set; }
+    public int Y { get; set; }
+    public string Color { get; set; }
+}
+
 public class DocumentModel
 {
     public int Version { get; set; } = 1;
     public List<NodeModel> Nodes { get; set; } = new();
     public List<ConnectionModel> Connections { get; set; } = new();
+    public List<CellModel> Cells { get; set; } = new();
 }
 
 // ---------- Runtime visuals ----------
@@ -144,6 +152,12 @@ public partial class MainWindow : Window
 
     AppSettings _settings = new();
     Point _canvasMenuPos;
+
+    // Painted grid cells, keyed by (column, row).
+    readonly Dictionary<(int, int), string> _cellColors = new();
+    readonly Dictionary<(int, int), Rectangle> _cellRects = new();
+    bool _painting, _erasing;
+    Point _lastPaintWorld;
 
     readonly List<NodeModel> _clipboardNodes = new();
     readonly List<ConnectionModel> _clipboardConns = new();
@@ -284,6 +298,7 @@ public partial class MainWindow : Window
         World.ContextMenu = canvasMenu;
         World.ContextMenuOpening += (s, a) =>
         {
+            if (PaintToggle.IsChecked == true) { a.Handled = true; return; }
             _canvasMenuPos = Mouse.GetPosition(World);
             miPaste.IsEnabled = _clipboardNodes.Count > 0;
         };
@@ -376,7 +391,11 @@ public partial class MainWindow : Window
             var doc = new DocumentModel
             {
                 Nodes = _nodes.Values.Select(n => n.Model).ToList(),
-                Connections = _conns.Select(c => c.Model).ToList()
+                Connections = _conns.Select(c => c.Model).ToList(),
+                Cells = _cellColors.Select(kv => new CellModel
+                {
+                    X = kv.Key.Item1, Y = kv.Key.Item2, Color = kv.Value
+                }).ToList()
             };
             File.WriteAllText(path, JsonSerializer.Serialize(doc, new JsonSerializerOptions { WriteIndented = true }));
             _dirty = false;
@@ -407,6 +426,9 @@ public partial class MainWindow : Window
         ClearDocument();
         foreach (var n in doc.Nodes) CreateNodeVisual(n);
         foreach (var c in doc.Connections) AddConnection(c.From, c.To, c.FromAnchor, c.ToAnchor);
+        if (doc.Cells != null)
+            foreach (var cell in doc.Cells)
+                PaintCell((cell.X, cell.Y), cell.Color);
         _currentFile = path;
         _dirty = false;
         UpdateTitle();
@@ -442,6 +464,10 @@ public partial class MainWindow : Window
         _drawRect = null;
         _drawingNew = false;
         _draggingNodes = false;
+        _cellColors.Clear();
+        _cellRects.Clear();
+        _painting = false;
+        _erasing = false;
     }
 
     void MarkDirty()
@@ -1572,6 +1598,78 @@ public partial class MainWindow : Window
         return new Point(from.X + dx * t, from.Y + dy * t);
     }
 
+    // ---------- Cell painting ----------
+
+    void PaintToggle_Changed(object sender, RoutedEventArgs e) => UpdateCursor();
+
+    static (int, int) CellAt(Point p) =>
+        ((int)Math.Floor(p.X / GridSize), (int)Math.Floor(p.Y / GridSize));
+
+    void PaintCell((int, int) key, string hex)
+    {
+        if (_cellColors.TryGetValue(key, out var existing) && existing == hex) return;
+        _cellColors[key] = hex;
+        if (!_cellRects.TryGetValue(key, out var r))
+        {
+            r = new Rectangle
+            {
+                Width = GridSize, Height = GridSize,
+                Opacity = 0.5,
+                IsHitTestVisible = false
+            };
+            Canvas.SetLeft(r, key.Item1 * GridSize);
+            Canvas.SetTop(r, key.Item2 * GridSize);
+            Panel.SetZIndex(r, 1);
+            World.Children.Add(r);
+            _cellRects[key] = r;
+        }
+        r.Fill = BrushFrom(hex);
+        MarkDirty();
+    }
+
+    void EraseCell((int, int) key)
+    {
+        if (!_cellColors.Remove(key)) return;
+        if (_cellRects.TryGetValue(key, out var r))
+        {
+            World.Children.Remove(r);
+            _cellRects.Remove(key);
+        }
+        MarkDirty();
+    }
+
+    // Fill every cell along the drag segment so fast strokes leave no gaps.
+    void PaintStroke(Point from, Point to, bool erase)
+    {
+        double dist = (to - from).Length;
+        int steps = Math.Max(1, (int)(dist / (GridSize / 2)));
+        for (int i = 0; i <= steps; i++)
+        {
+            var p = from + (to - from) * (i / (double)steps);
+            var key = CellAt(p);
+            if (erase) EraseCell(key);
+            else PaintCell(key, _lastColor);
+        }
+    }
+
+    void World_MouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (PaintToggle.IsChecked != true || e.OriginalSource != World) return;
+        _erasing = true;
+        _lastPaintWorld = e.GetPosition(World);
+        PaintStroke(_lastPaintWorld, _lastPaintWorld, erase: true);
+        World.CaptureMouse();
+        e.Handled = true;
+    }
+
+    void World_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_erasing) return;
+        _erasing = false;
+        World.ReleaseMouseCapture();
+        e.Handled = true;
+    }
+
     // ---------- Canvas interaction ----------
 
     void World_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -1579,6 +1677,16 @@ public partial class MainWindow : Window
         if (_spaceDown || _panning || _linking) return;
         if (e.OriginalSource != World) return;
         CommitEdit();
+
+        if (PaintToggle.IsChecked == true)
+        {
+            _painting = true;
+            _lastPaintWorld = e.GetPosition(World);
+            PaintStroke(_lastPaintWorld, _lastPaintWorld, erase: false);
+            World.CaptureMouse();
+            e.Handled = true;
+            return;
+        }
 
         if (e.ClickCount == 2)
         {
@@ -1653,6 +1761,13 @@ public partial class MainWindow : Window
         var p = e.GetPosition(World);
         _lastWorldMouse = p;
 
+        if (_painting || _erasing)
+        {
+            PaintStroke(_lastPaintWorld, p, erase: _erasing);
+            _lastPaintWorld = p;
+            return;
+        }
+
         if (_rubberBanding && _rubberRect != null)
         {
             Canvas.SetLeft(_rubberRect, Math.Min(p.X, _rubberStart.X));
@@ -1672,6 +1787,14 @@ public partial class MainWindow : Window
 
     void World_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
+        if (_painting)
+        {
+            _painting = false;
+            World.ReleaseMouseCapture();
+            e.Handled = true;
+            return;
+        }
+
         if (_drawingNew)
         {
             _drawingNew = false;
@@ -1843,6 +1966,8 @@ public partial class MainWindow : Window
         var b = Rect.Empty;
         foreach (var nv in _nodes.Values)
             b.Union(new Rect(nv.Model.X, nv.Model.Y, nv.Model.W, nv.Model.H));
+        foreach (var key in _cellColors.Keys)
+            b.Union(new Rect(key.Item1 * GridSize, key.Item2 * GridSize, GridSize, GridSize));
         if (b.IsEmpty) return b;
         b.Inflate(margin, margin);
         return b;
@@ -1850,7 +1975,9 @@ public partial class MainWindow : Window
 
     void UpdateCursor()
     {
-        Viewport.Cursor = _spaceDown || _panning ? Cursors.Hand : Cursors.Arrow;
+        Viewport.Cursor = _spaceDown || _panning
+            ? Cursors.Hand
+            : (PaintToggle.IsChecked == true ? Cursors.Pen : Cursors.Arrow);
     }
 
     // ---------- Keyboard ----------
@@ -1897,7 +2024,11 @@ public partial class MainWindow : Window
             case Key.Back:
                 DeleteSelected(); e.Handled = true; break;
             case Key.Escape:
-                ClearSelection();
+                if (PaintToggle.IsChecked == true) PaintToggle.IsChecked = false;
+                else ClearSelection();
+                e.Handled = true; break;
+            case Key.P:
+                PaintToggle.IsChecked = PaintToggle.IsChecked != true;
                 e.Handled = true; break;
             case Key.Left: Nudge(-(shift ? 1 : GridSize), 0); e.Handled = true; break;
             case Key.Right: Nudge(shift ? 1 : GridSize, 0); e.Handled = true; break;

@@ -60,6 +60,8 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
 - **Zoom** 10%-400% with the wheel, anchored at the cursor; Fit and 100% shortcuts
 - Window resizing keeps the view centered on the same spot
 - **Snap to grid** toggle for tidy layouts
+- **Cell painting** (`P` or the Paint button): drag to highlight grid cells with the
+  current color - great for zoning the board; right-drag erases, saved with the file
 
 ### Shapes
 - Nine shapes: **rectangle, pill, ellipse, diamond, hexagon, parallelogram, trapezoid,
@@ -110,6 +112,7 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
 | Resize shape | Drag the corner resize grip |
 | Connect shapes | Hover a shape, drag any of its 8 dots onto another shape |
 | Pan | Drag empty canvas, middle-drag, or Space+drag |
+| Paint cells | `P` (or 🖌 Paint), drag to paint, right-drag to erase |
 | Zoom | Mouse wheel, Ctrl +/−, Fit, 100% |
 | Box select | Shift+drag (Ctrl+drag adds to selection) |
 | Toggle select | Ctrl+click |

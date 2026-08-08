@@ -90,6 +90,14 @@
                         </StackPanel>
                     </Border>
                 </Popup>
+                <ToggleButton x:Name="PaintToggle" Style="{StaticResource ToolToggle}"
+                              Checked="PaintToggle_Changed" Unchecked="PaintToggle_Changed"
+                              ToolTip="Paint grid cells with the current color (P): drag to paint, right-drag to erase">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="🖌" VerticalAlignment="Center"/>
+                        <TextBlock Text=" Paint" Margin="3,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </ToggleButton>
                 <Border Width="1" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
 
                 <Button x:Name="ShapeBtn" Style="{StaticResource ToolBtn}" Click="ShapeBtn_Click"
@@ -206,7 +214,7 @@
         <Border DockPanel.Dock="Bottom" Background="{DynamicResource Brush.PanelBg}"
                 BorderBrush="{DynamicResource Brush.PanelBorder}" BorderThickness="0,1,0,0" Padding="10,4">
             <TextBlock FontSize="12" Foreground="{DynamicResource Brush.SubtleText}"
-                       Text="Double-click canvas: add shape  •  Alt+drag canvas: draw shape to size  •  Drag canvas: pan  •  Shift+drag: box-select  •  Double-click shape: edit  •  Drag a dot: connect  •  Wheel: zoom  •  Ctrl+C/X/V: copy/cut/paste"/>
+                       Text="Double-click canvas: add shape  •  Alt+drag: draw shape to size  •  Drag canvas: pan  •  Shift+drag: box-select  •  Drag a dot: connect  •  P: paint cells (right-drag erases)  •  Wheel: zoom  •  Ctrl+C/X/V: copy/cut/paste"/>
         </Border>
 
         <!-- Board -->
@@ -220,7 +228,9 @@
                     Background="{DynamicResource Brush.Grid}"
                     MouseLeftButtonDown="World_MouseLeftButtonDown"
                     MouseMove="World_MouseMove"
-                    MouseLeftButtonUp="World_MouseLeftButtonUp">
+                    MouseLeftButtonUp="World_MouseLeftButtonUp"
+                    MouseRightButtonDown="World_MouseRightButtonDown"
+                    MouseRightButtonUp="World_MouseRightButtonUp">
                 <Canvas.RenderTransform>
                     <TransformGroup>
                         <ScaleTransform x:Name="Scale"/>
