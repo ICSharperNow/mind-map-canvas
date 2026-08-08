@@ -46,6 +46,9 @@ public class ConnectionModel
 {
     public Guid From { get; set; }
     public Guid To { get; set; }
+    // Anchor names (Side enum values). Null means auto: aim at the other node's center.
+    public string FromAnchor { get; set; }
+    public string ToAnchor { get; set; }
 }
 
 public class DocumentModel
@@ -130,6 +133,7 @@ public partial class MainWindow : Window
 
     bool _linking;
     NodeVisual _linkSource;
+    Side _linkSourceSide;
     NodeVisual _linkHover;
     Line _linkPreview;
 
@@ -245,15 +249,23 @@ public partial class MainWindow : Window
 
         ResetView();
 
-        var m = new NodeModel
+        var startupFile = ((App)Application.Current).StartupFile;
+        if (startupFile != null)
         {
-            X = Snap(WorldSize / 2 - 84),
-            Y = Snap(WorldSize / 2 - 48),
-            Text = "Double-click the canvas to add your first idea"
-        };
-        CreateNodeVisual(m);
-        _dirty = false;
-        UpdateTitle();
+            LoadFile(startupFile);
+        }
+        else
+        {
+            var m = new NodeModel
+            {
+                X = Snap(WorldSize / 2 - 84),
+                Y = Snap(WorldSize / 2 - 48),
+                Text = "Double-click the canvas to add your first idea"
+            };
+            CreateNodeVisual(m);
+            _dirty = false;
+            UpdateTitle();
+        }
         Focus();
     }
 
@@ -353,7 +365,7 @@ public partial class MainWindow : Window
 
         ClearDocument();
         foreach (var n in doc.Nodes) CreateNodeVisual(n);
-        foreach (var c in doc.Connections) AddConnection(c.From, c.To);
+        foreach (var c in doc.Connections) AddConnection(c.From, c.To, c.FromAnchor, c.ToAnchor);
         _currentFile = path;
         _dirty = false;
         UpdateTitle();
@@ -981,7 +993,7 @@ public partial class MainWindow : Window
             clones.Add(CreateNodeVisual(m));
         }
         foreach (var c in _conns.Where(c => map.ContainsKey(c.Model.From) && map.ContainsKey(c.Model.To)).ToList())
-            AddConnection(map[c.Model.From], map[c.Model.To]);
+            AddConnection(map[c.Model.From], map[c.Model.To], c.Model.FromAnchor, c.Model.ToAnchor);
         ClearSelection();
         foreach (var nv in clones)
         {
@@ -1003,7 +1015,11 @@ public partial class MainWindow : Window
             _clipboardNodes.Add(_nodes[id].Model.Clone(keepId: true));
         foreach (var c in _conns)
             if (_selected.Contains(c.Model.From) && _selected.Contains(c.Model.To))
-                _clipboardConns.Add(new ConnectionModel { From = c.Model.From, To = c.Model.To });
+                _clipboardConns.Add(new ConnectionModel
+                {
+                    From = c.Model.From, To = c.Model.To,
+                    FromAnchor = c.Model.FromAnchor, ToAnchor = c.Model.ToAnchor
+                });
     }
 
     void CutSelected()
@@ -1038,7 +1054,7 @@ public partial class MainWindow : Window
             created.Add(CreateNodeVisual(m));
         }
         foreach (var c in _clipboardConns)
-            AddConnection(map[c.From], map[c.To]);
+            AddConnection(map[c.From], map[c.To], c.FromAnchor, c.ToAnchor);
         ClearSelection();
         foreach (var nv in created)
         {
@@ -1119,9 +1135,10 @@ public partial class MainWindow : Window
         foreach (var h in nv.Handles) h.Visibility = vis;
     }
 
-    static Point SideAnchor(NodeVisual nv, Side side)
+    static Point SideAnchor(NodeVisual nv, Side side) => SideAnchorM(nv.Model, side);
+
+    static Point SideAnchorM(NodeModel m, Side side)
     {
-        var m = nv.Model;
         return side switch
         {
             Side.Left => new Point(m.X, m.Y + m.H / 2),
@@ -1135,11 +1152,24 @@ public partial class MainWindow : Window
         };
     }
 
+    static string NearestAnchor(NodeModel m, Point p)
+    {
+        Side best = Side.Left;
+        double bd = double.MaxValue;
+        foreach (Side s in Enum.GetValues<Side>())
+        {
+            var d = (SideAnchorM(m, s) - p).LengthSquared;
+            if (d < bd) { bd = d; best = s; }
+        }
+        return best.ToString();
+    }
+
     void StartLink(NodeVisual nv, Side side, Ellipse handle)
     {
         CommitEdit();
         _linking = true;
         _linkSource = nv;
+        _linkSourceSide = side;
         _linkHover = null;
         var a = SideAnchor(nv, side);
         _linkPreview = new Line
@@ -1177,9 +1207,12 @@ public partial class MainWindow : Window
         handle.ReleaseMouseCapture();
         var p = e.GetPosition(World);
         var src = _linkSource;
+        var srcSide = _linkSourceSide;
         var target = HitNode(p, src);
         CancelLink();
-        if (target != null && AddConnection(src.Model.Id, target.Model.Id) != null)
+        if (target != null &&
+            AddConnection(src.Model.Id, target.Model.Id,
+                srcSide.ToString(), NearestAnchor(target.Model, p)) != null)
             MarkDirty();
         if (!src.Root.IsMouseOver) ShowHandles(src, false);
         e.Handled = true;
@@ -1219,13 +1252,16 @@ public partial class MainWindow : Window
 
     // ---------- Connections ----------
 
-    ConnectionVisual AddConnection(Guid from, Guid to)
+    ConnectionVisual AddConnection(Guid from, Guid to, string fromAnchor = null, string toAnchor = null)
     {
         if (from == to) return null;
         if (!_nodes.ContainsKey(from) || !_nodes.ContainsKey(to)) return null;
         if (_conns.Any(c => c.Model.From == from && c.Model.To == to)) return null;
 
-        var cv = new ConnectionVisual { Model = new ConnectionModel { From = from, To = to } };
+        var cv = new ConnectionVisual
+        {
+            Model = new ConnectionModel { From = from, To = to, FromAnchor = fromAnchor, ToAnchor = toAnchor }
+        };
         cv.Body = new Line
         {
             Stroke = ConnBrush, StrokeThickness = 2,
@@ -1272,8 +1308,13 @@ public partial class MainWindow : Window
         if (!_nodes.TryGetValue(cv.Model.From, out var a) || !_nodes.TryGetValue(cv.Model.To, out var b)) return;
         var ca = new Point(a.Model.X + a.Model.W / 2, a.Model.Y + a.Model.H / 2);
         var cb = new Point(b.Model.X + b.Model.W / 2, b.Model.Y + b.Model.H / 2);
-        var p1 = EdgePointFor(a.Model, ca, cb);
-        var p2 = EdgePointFor(b.Model, cb, ca);
+        // Pinned anchors stay on the exact dot the user chose; otherwise aim center-to-center.
+        var p1 = Enum.TryParse<Side>(cv.Model.FromAnchor, out var sa)
+            ? SideAnchorM(a.Model, sa)
+            : EdgePointFor(a.Model, ca, cb);
+        var p2 = Enum.TryParse<Side>(cv.Model.ToAnchor, out var sb)
+            ? SideAnchorM(b.Model, sb)
+            : EdgePointFor(b.Model, cb, ca);
         var v = p2 - p1;
 
         bool visible = v.Length > 2;
@@ -1685,7 +1726,7 @@ public partial class MainWindow : Window
 
         var dlg = new SaveFileDialog
         {
-            Filter = "PNG image (*.png)|*.png",
+            Filter = "PNG image (*.png)|*.png|JPEG image (*.jpg)|*.jpg|PDF document (*.pdf)|*.pdf|BMP image (*.bmp)|*.bmp|TIFF image (*.tif)|*.tif",
             DefaultExt = ".png",
             FileName = "mindmap.png"
         };
@@ -1713,15 +1754,38 @@ public partial class MainWindow : Window
             };
             var dv = new DrawingVisual();
             using (var dc = dv.RenderOpen())
+            {
+                // Opaque background so JPEG/PDF don't render transparency as black.
+                dc.DrawRectangle(new SolidColorBrush(ThemeManager.Current.CanvasBg), null, new Rect(0, 0, w, h));
                 dc.DrawRectangle(brush, null, new Rect(0, 0, w, h));
+            }
 
             var rtb = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
             rtb.Render(dv);
+            var frame = BitmapFrame.Create(rtb);
 
-            var enc = new PngBitmapEncoder();
-            enc.Frames.Add(BitmapFrame.Create(rtb));
-            using var fs = File.Create(dlg.FileName);
-            enc.Save(fs);
+            string ext = IOPath.GetExtension(dlg.FileName).ToLowerInvariant();
+            if (ext == ".pdf")
+            {
+                var jpeg = new JpegBitmapEncoder { QualityLevel = 92 };
+                jpeg.Frames.Add(frame);
+                using var ms = new MemoryStream();
+                jpeg.Save(ms);
+                PdfWriter.WriteImagePdf(dlg.FileName, ms.ToArray(), w, h);
+            }
+            else
+            {
+                BitmapEncoder enc = ext switch
+                {
+                    ".jpg" or ".jpeg" => new JpegBitmapEncoder { QualityLevel = 92 },
+                    ".bmp" => new BmpBitmapEncoder(),
+                    ".tif" or ".tiff" => new TiffBitmapEncoder(),
+                    _ => new PngBitmapEncoder()
+                };
+                enc.Frames.Add(frame);
+                using var fs = File.Create(dlg.FileName);
+                enc.Save(fs);
+            }
         }
         catch (Exception ex)
         {

@@ -1,0 +1,26 @@
+{
+  "Version": 1,
+  "Nodes": [
+    { "Id": "00000000-0000-0000-0000-000000000001", "X": 19872, "Y": 19836, "W": 240, "H": 128, "Text": "Product Launch", "Color": "#A8D8F0", "Shape": "Ellipse", "FontSize": 18, "TextColor": "#1D3557", "Align": "Center", "Bold": true, "Italic": false },
+    { "Id": "00000000-0000-0000-0000-000000000002", "X": 19296, "Y": 19512, "W": 180, "H": 96, "Text": "Marketing", "Color": "#FFF9B1", "Shape": "Rect", "FontSize": 15, "TextColor": "#2D333A", "Align": "Center", "Bold": true, "Italic": false },
+    { "Id": "00000000-0000-0000-0000-000000000003", "X": 20496, "Y": 19512, "W": 204, "H": 96, "Text": "Engineering", "Color": "#C5E8A5", "Shape": "Hexagon", "FontSize": 15, "TextColor": "#2D333A", "Align": "Center", "Bold": true, "Italic": false },
+    { "Id": "00000000-0000-0000-0000-000000000004", "X": 19296, "Y": 20184, "W": 180, "H": 120, "Text": "Design", "Color": "#F8A5C2", "Shape": "Diamond", "FontSize": 15, "TextColor": "#2D333A", "Align": "Center", "Bold": true, "Italic": false },
+    { "Id": "00000000-0000-0000-0000-000000000005", "X": 20496, "Y": 20184, "W": 192, "H": 96, "Text": "Budget", "Color": "#FFCF7D", "Shape": "Parallelogram", "FontSize": 15, "TextColor": "#2D333A", "Align": "Center", "Bold": true, "Italic": false },
+    { "Id": "00000000-0000-0000-0000-000000000006", "X": 18984, "Y": 19248, "W": 168, "H": 80, "Text": "Social campaign", "Color": "#FFF9B1", "Shape": "Rect", "FontSize": 12, "TextColor": "#2D333A", "Align": "Center", "Bold": false, "Italic": false },
+    { "Id": "00000000-0000-0000-0000-000000000007", "X": 20856, "Y": 19248, "W": 168, "H": 80, "Text": "Beta testing", "Color": "#C5E8A5", "Shape": "Rect", "FontSize": 12, "TextColor": "#2D333A", "Align": "Center", "Bold": false, "Italic": false },
+    { "Id": "00000000-0000-0000-0000-000000000008", "X": 18984, "Y": 20448, "W": 168, "H": 80, "Text": "Brand refresh", "Color": "#F8A5C2", "Shape": "Rect", "FontSize": 12, "TextColor": "#2D333A", "Align": "Center", "Bold": false, "Italic": false },
+    { "Id": "00000000-0000-0000-0000-000000000009", "X": 20856, "Y": 20448, "W": 168, "H": 80, "Text": "Q3 forecast", "Color": "#FFCF7D", "Shape": "Rect", "FontSize": 12, "TextColor": "#2D333A", "Align": "Center", "Bold": false, "Italic": true },
+    { "Id": "00000000-0000-0000-0000-00000000000a", "X": 19872, "Y": 20496, "W": 240, "H": 84, "Text": "Ship it 🚀", "Color": "#D7B8F3", "Shape": "Rect", "FontSize": 16, "TextColor": "#4A2B7A", "Align": "Center", "Bold": true, "Italic": false }
+  ],
+  "Connections": [
+    { "From": "00000000-0000-0000-0000-000000000001", "To": "00000000-0000-0000-0000-000000000002", "FromAnchor": "Left", "ToAnchor": "Right" },
+    { "From": "00000000-0000-0000-0000-000000000001", "To": "00000000-0000-0000-0000-000000000003", "FromAnchor": "Right", "ToAnchor": "Left" },
+    { "From": "00000000-0000-0000-0000-000000000001", "To": "00000000-0000-0000-0000-000000000004", "FromAnchor": "BottomLeft", "ToAnchor": "Right" },
+    { "From": "00000000-0000-0000-0000-000000000001", "To": "00000000-0000-0000-0000-000000000005", "FromAnchor": "BottomRight", "ToAnchor": "Left" },
+    { "From": "00000000-0000-0000-0000-000000000002", "To": "00000000-0000-0000-0000-000000000006", "FromAnchor": "TopLeft", "ToAnchor": "Bottom" },
+    { "From": "00000000-0000-0000-0000-000000000003", "To": "00000000-0000-0000-0000-000000000007", "FromAnchor": "TopRight", "ToAnchor": "Bottom" },
+    { "From": "00000000-0000-0000-0000-000000000004", "To": "00000000-0000-0000-0000-000000000008", "FromAnchor": "Left", "ToAnchor": "Top" },
+    { "From": "00000000-0000-0000-0000-000000000005", "To": "00000000-0000-0000-0000-000000000009", "FromAnchor": "Right", "ToAnchor": "Top" },
+    { "From": "00000000-0000-0000-0000-00000000000a", "To": "00000000-0000-0000-0000-000000000001", "FromAnchor": "Top", "ToAnchor": "Bottom" }
+  ]
+}
