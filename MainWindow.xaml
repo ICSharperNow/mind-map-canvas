@@ -1,0 +1,115 @@
+<Window x:Class="MindMapCanvas.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="MindMap Canvas"
+        Height="820" Width="1320"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource Brush.WindowBg}"
+        PreviewKeyDown="Window_PreviewKeyDown"
+        PreviewKeyUp="Window_PreviewKeyUp"
+        Loaded="Window_Loaded"
+        Closing="Window_Closing">
+    <Window.Resources>
+        <!-- Submenu popups keep the system's light background, so their text stays dark in every theme. -->
+        <Style x:Key="SubItem" TargetType="MenuItem">
+            <Setter Property="Foreground" Value="#1F2328"/>
+        </Style>
+    </Window.Resources>
+    <DockPanel>
+
+        <!-- Menu bar -->
+        <Border DockPanel.Dock="Top" Background="{DynamicResource Brush.PanelBg}"
+                BorderBrush="{DynamicResource Brush.PanelBorder}" BorderThickness="0,0,0,1">
+            <Menu Background="Transparent" FontSize="13" Padding="4,2">
+                <MenuItem Header="_File" Foreground="{DynamicResource Brush.Text}">
+                    <MenuItem Header="_New" Click="New_Click" InputGestureText="Ctrl+N" Style="{StaticResource SubItem}"/>
+                    <MenuItem Header="_Open…" Click="Open_Click" InputGestureText="Ctrl+O" Style="{StaticResource SubItem}"/>
+                    <MenuItem Header="_Save" Click="Save_Click" InputGestureText="Ctrl+S" Style="{StaticResource SubItem}"/>
+                    <MenuItem Header="Save _As…" Click="SaveAs_Click" InputGestureText="Ctrl+Shift+S" Style="{StaticResource SubItem}"/>
+                    <Separator/>
+                    <MenuItem Header="_Export PNG…" Click="Export_Click" Style="{StaticResource SubItem}"/>
+                    <Separator/>
+                    <MenuItem Header="E_xit" Click="Exit_Click" InputGestureText="Alt+F4" Style="{StaticResource SubItem}"/>
+                </MenuItem>
+                <MenuItem Header="_Edit" Foreground="{DynamicResource Brush.Text}">
+                    <MenuItem Header="_Duplicate" Click="Duplicate_Click" InputGestureText="Ctrl+D" Style="{StaticResource SubItem}"/>
+                    <MenuItem Header="De_lete" Click="Delete_Click" InputGestureText="Del" Style="{StaticResource SubItem}"/>
+                    <Separator/>
+                    <MenuItem Header="Select _All" Click="SelectAll_Click" InputGestureText="Ctrl+A" Style="{StaticResource SubItem}"/>
+                </MenuItem>
+                <MenuItem Header="_View" Foreground="{DynamicResource Brush.Text}">
+                    <MenuItem Header="Zoom _In" Click="ZoomIn_Click" InputGestureText="Ctrl++" Style="{StaticResource SubItem}"/>
+                    <MenuItem Header="Zoom _Out" Click="ZoomOut_Click" InputGestureText="Ctrl+-" Style="{StaticResource SubItem}"/>
+                    <MenuItem Header="Zoom to _Fit" Click="Fit_Click" Style="{StaticResource SubItem}"/>
+                    <MenuItem Header="_Actual Size (100%)" Click="Zoom100_Click" InputGestureText="Ctrl+0" Style="{StaticResource SubItem}"/>
+                </MenuItem>
+                <MenuItem Header="_Settings" Foreground="{DynamicResource Brush.Text}">
+                    <MenuItem Header="_Settings…" Click="Settings_Click" Style="{StaticResource SubItem}"/>
+                </MenuItem>
+            </Menu>
+        </Border>
+
+        <!-- Toolbar -->
+        <Border DockPanel.Dock="Top" Background="{DynamicResource Brush.PanelBg}"
+                BorderBrush="{DynamicResource Brush.PanelBorder}" BorderThickness="0,0,0,1" Padding="8,6">
+            <StackPanel Orientation="Horizontal">
+                <Button Style="{StaticResource ToolBtn}" Click="New_Click" Content="New" ToolTip="New board (Ctrl+N)"/>
+                <Button Style="{StaticResource ToolBtn}" Click="Open_Click" Content="Open…" ToolTip="Open board (Ctrl+O)"/>
+                <Button Style="{StaticResource ToolBtn}" Click="Save_Click" Content="Save" ToolTip="Save board (Ctrl+S / Ctrl+Shift+S)"/>
+                <Border Width="1" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
+
+                <Button Style="{StaticResource ToolBtn}" Click="AddNote_Click" Content="＋ Note" ToolTip="Add a sticky note (or double-click the canvas)"/>
+                <ToggleButton x:Name="ConnectToggle" Style="{StaticResource ToolToggle}" Content="⤳ Connect"
+                              ToolTip="Connect mode (C): click one note, then another"
+                              Checked="ConnectToggle_Changed" Unchecked="ConnectToggle_Changed"/>
+                <Button Style="{StaticResource ToolBtn}" Click="Delete_Click" Content="🗑 Delete" ToolTip="Delete selection (Del)"/>
+                <Border Width="1" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
+
+                <StackPanel x:Name="SwatchPanel" Orientation="Horizontal" VerticalAlignment="Center"/>
+                <Border Width="1" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
+
+                <CheckBox x:Name="SnapCheck" Content="Snap to grid" IsChecked="True" VerticalAlignment="Center"
+                          Margin="4,0" FontSize="13" Foreground="{DynamicResource Brush.Text}"/>
+                <Border Width="1" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
+
+                <Button Style="{StaticResource ToolBtn}" Click="ZoomOut_Click" Content="−" Width="30" ToolTip="Zoom out (Ctrl+-)"/>
+                <TextBlock x:Name="ZoomLabel" Text="100%" Width="46" TextAlignment="Center" VerticalAlignment="Center"
+                           FontSize="13" Foreground="{DynamicResource Brush.Text}"/>
+                <Button Style="{StaticResource ToolBtn}" Click="ZoomIn_Click" Content="＋" Width="30" ToolTip="Zoom in (Ctrl++)"/>
+                <Button Style="{StaticResource ToolBtn}" Click="Fit_Click" Content="Fit" ToolTip="Zoom to fit all notes"/>
+                <Button Style="{StaticResource ToolBtn}" Click="Zoom100_Click" Content="100%" ToolTip="Reset zoom (Ctrl+0)"/>
+                <Border Width="1" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
+
+                <Button Style="{StaticResource ToolBtn}" Click="Export_Click" Content="Export PNG" ToolTip="Export the board as a PNG image"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Status bar -->
+        <Border DockPanel.Dock="Bottom" Background="{DynamicResource Brush.PanelBg}"
+                BorderBrush="{DynamicResource Brush.PanelBorder}" BorderThickness="0,1,0,0" Padding="10,4">
+            <TextBlock FontSize="12" Foreground="{DynamicResource Brush.SubtleText}"
+                       Text="Double-click canvas: add note  •  Double-click note: edit  •  Drag: move / box-select  •  Wheel: zoom  •  Space or middle-drag: pan  •  C: connect  •  Del: delete  •  Ctrl+D: duplicate"/>
+        </Border>
+
+        <!-- Board -->
+        <Grid x:Name="Viewport" ClipToBounds="True" Background="{DynamicResource Brush.CanvasOuter}"
+              MouseWheel="Viewport_MouseWheel"
+              PreviewMouseDown="Viewport_PreviewMouseDown"
+              MouseMove="Viewport_MouseMove"
+              PreviewMouseUp="Viewport_PreviewMouseUp">
+            <Canvas x:Name="World" Width="40000" Height="40000"
+                    Background="{DynamicResource Brush.Grid}"
+                    MouseLeftButtonDown="World_MouseLeftButtonDown"
+                    MouseMove="World_MouseMove"
+                    MouseLeftButtonUp="World_MouseLeftButtonUp">
+                <Canvas.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform x:Name="Scale"/>
+                        <TranslateTransform x:Name="Pan"/>
+                    </TransformGroup>
+                </Canvas.RenderTransform>
+            </Canvas>
+        </Grid>
+
+    </DockPanel>
+</Window>
