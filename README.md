@@ -23,7 +23,8 @@ connectors, and export the result anywhere.
 |:---:|:---:|
 | ![Light theme](docs/preview-light.png) | ![Dark theme](docs/preview-dark.png) |
 
-*(Slate and Sepia themes are also included - switch live in **Settings → Settings…**.)*
+*(Eight built-in themes - Light, Dark, Slate, Sepia, Midnight, Ocean, Forest, Rose -
+plus a custom theme builder. Switch live in **Settings → Settings…**.)*
 
 ## Install
 
@@ -62,7 +63,8 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
 - **Snap to grid** toggle for tidy layouts
 - **Cell painting** (`P` or the Paint button): drag to highlight a whole area of grid
   cells with the current color - great for zoning the board; Shift+drag for a freehand
-  brush, right-drag to erase, Ctrl+Z (or the ↩ button) to undo; saved with the file
+  brush, right-drag to erase (a plain right-click still opens menus), Ctrl+Z (or the
+  ↩ button) to undo, and an **opacity slider** controls how strong new paint is
 
 ### Shapes
 - Nine shapes: **rectangle, pill, ellipse, diamond, hexagon, parallelogram, trapezoid,
@@ -82,8 +84,13 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
 - Drag a dot onto another shape to draw an arrow - while dragging, a ring previews the
   exact dot it will snap to, and the connection **stays pinned to those dots** on both
   ends as the shapes move
-- Right-click an arrow to reverse its direction or delete it
-- Arrows hug the true outline of ellipses and diamonds
+- Right-click an arrow to **recolor it** (presets or the custom picker), reverse its
+  direction, or delete it
+- Arrows and connector dots hug the true outline of ellipses and diamonds - no floating
+  gaps on curved shapes
+- Connector dots, grips, and rotation handles **auto-scale with zoom** so they stay
+  easy to grab when zoomed out
+- Selected shapes get a clear accent glow and thicker outline
 - Click an arrow to select it; `Del` removes it
 
 ### Images & links

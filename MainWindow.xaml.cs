@@ -58,6 +58,8 @@ public class ConnectionModel
     // Anchor names (Side enum values). Null means auto: aim at the other node's center.
     public string FromAnchor { get; set; }
     public string ToAnchor { get; set; }
+    // Null means the theme's default connector color.
+    public string Color { get; set; }
 }
 
 public class CellModel
@@ -65,7 +67,10 @@ public class CellModel
     public int X { get; set; }
     public int Y { get; set; }
     public string Color { get; set; }
+    public double Opacity { get; set; } = 0.5;
 }
+
+public readonly record struct CellData(string Hex, double Op);
 
 public class DocumentModel
 {
@@ -89,6 +94,8 @@ public class NodeVisual
     public TextBox Editor;
     public Thumb Grip;
     public List<Ellipse> Handles = new();
+    // Shared inverse-zoom scale so handles stay clickable at any zoom level.
+    public ScaleTransform HandleScaleT = new(1, 1);
 }
 
 public class ConnectionVisual
@@ -166,7 +173,7 @@ public partial class MainWindow : Window
     Point _canvasMenuPos;
 
     // Painted grid cells, keyed by (column, row).
-    readonly Dictionary<(int, int), string> _cellColors = new();
+    readonly Dictionary<(int, int), CellData> _cellColors = new();
     readonly Dictionary<(int, int), Rectangle> _cellRects = new();
     bool _painting, _erasing, _areaPainting, _areaErase;
     Point _lastPaintWorld, _areaStart;
@@ -174,8 +181,11 @@ public partial class MainWindow : Window
 
     sealed class PaintOp
     {
-        public readonly List<((int, int) Key, string Before, string After)> Changes = new();
+        public readonly List<((int, int) Key, CellData? Before, CellData? After)> Changes = new();
     }
+
+    bool _erasePendingStart;
+    Point _erasePressPos;
 
     readonly List<PaintOp> _paintUndo = new();
     PaintOp _activeOp;
@@ -319,7 +329,6 @@ public partial class MainWindow : Window
         World.ContextMenu = canvasMenu;
         World.ContextMenuOpening += (s, a) =>
         {
-            if (PaintToggle.IsChecked == true) { a.Handled = true; return; }
             _canvasMenuPos = Mouse.GetPosition(World);
             miPaste.IsEnabled = _clipboardNodes.Count > 0;
         };
@@ -415,7 +424,7 @@ public partial class MainWindow : Window
                 Connections = _conns.Select(c => c.Model).ToList(),
                 Cells = _cellColors.Select(kv => new CellModel
                 {
-                    X = kv.Key.Item1, Y = kv.Key.Item2, Color = kv.Value
+                    X = kv.Key.Item1, Y = kv.Key.Item2, Color = kv.Value.Hex, Opacity = kv.Value.Op
                 }).ToList()
             };
             File.WriteAllText(path, JsonSerializer.Serialize(doc, new JsonSerializerOptions { WriteIndented = true }));
@@ -446,10 +455,10 @@ public partial class MainWindow : Window
 
         ClearDocument();
         foreach (var n in doc.Nodes) CreateNodeVisual(n);
-        foreach (var c in doc.Connections) AddConnection(c.From, c.To, c.FromAnchor, c.ToAnchor);
+        foreach (var c in doc.Connections) AddConnection(c.From, c.To, c.FromAnchor, c.ToAnchor, c.Color);
         if (doc.Cells != null)
             foreach (var cell in doc.Cells)
-                SetCell((cell.X, cell.Y), cell.Color);
+                SetCell((cell.X, cell.Y), new CellData(cell.Color, cell.Opacity <= 0 ? 0.5 : cell.Opacity));
         _currentFile = path;
         _dirty = false;
         UpdateTitle();
@@ -533,6 +542,34 @@ public partial class MainWindow : Window
         return new ControlTemplate(typeof(Thumb)) { VisualTree = root };
     }
 
+    static readonly DropShadowEffect NodeShadow = MakeFrozen(new DropShadowEffect
+    {
+        BlurRadius = 10, ShadowDepth = 2, Direction = 270, Opacity = 0.18
+    });
+
+    static readonly DropShadowEffect SelectedGlow = MakeFrozen(new DropShadowEffect
+    {
+        BlurRadius = 16, ShadowDepth = 0, Color = Color.FromRgb(0x4C, 0x6E, 0xF5), Opacity = 0.9
+    });
+
+    static DropShadowEffect MakeFrozen(DropShadowEffect e)
+    {
+        e.Freeze();
+        return e;
+    }
+
+    double HandleScaleFactor() => Math.Clamp(1.0 / _zoom, 0.6, 3.0);
+
+    void UpdateHandleScale()
+    {
+        double k = HandleScaleFactor();
+        foreach (var nv in _nodes.Values)
+            nv.HandleScaleT.ScaleX = nv.HandleScaleT.ScaleY = k;
+        double hit = Math.Max(10, 14 * k);
+        foreach (var cv in _conns)
+            cv.Hit.StrokeThickness = hit;
+    }
+
     static Shape MakeShapeElement(string kind)
     {
         Shape s = kind switch
@@ -576,7 +613,7 @@ public partial class MainWindow : Window
             _ => new Rectangle { RadiusX = 8, RadiusY = 8 },
         };
         s.StrokeThickness = 1;
-        s.Effect = new DropShadowEffect { BlurRadius = 10, ShadowDepth = 2, Direction = 270, Opacity = 0.18 };
+        s.Effect = NodeShadow;
         return s;
     }
 
@@ -626,6 +663,7 @@ public partial class MainWindow : Window
         nv.Root.Children.Insert(idx, s);
         nv.ShapeEl = s;
         UpdateTextInsets(nv);
+        UpdateHandlePositions(nv);
         RefreshNodeChrome(nv);
     }
 
@@ -762,13 +800,19 @@ public partial class MainWindow : Window
         rotHandle.MouseMove += (s, e) => Rotate_Move(nv, rotHandle, e);
         rotHandle.MouseLeftButtonUp += (s, e) => Rotate_Up(rotHandle, e);
 
-        // Side connector handles (Mural/Miro style): drag one onto another shape to link.
+        // Connector handles (Mural/Miro style): drag one onto another shape to link.
         foreach (Side side in Enum.GetValues<Side>())
         {
             var handle = MakeHandle(nv, side);
             nv.Handles.Add(handle);
             root.Children.Add(handle);
         }
+        UpdateHandlePositions(nv);
+        grip.RenderTransformOrigin = new Point(0.5, 0.5);
+        grip.RenderTransform = nv.HandleScaleT;
+        rotHandle.RenderTransformOrigin = new Point(0.5, 0.5);
+        rotHandle.RenderTransform = nv.HandleScaleT;
+        nv.HandleScaleT.ScaleX = nv.HandleScaleT.ScaleY = HandleScaleFactor();
 
         root.MouseLeftButtonDown += (s, e) => Node_Down(nv, e);
         root.MouseMove += (s, e) => Node_Move(nv, e);
@@ -1243,7 +1287,8 @@ public partial class MainWindow : Window
     {
         bool highlighted = _selected.Contains(nv.Model.Id) || _linkHover == nv;
         nv.ShapeEl.Stroke = highlighted ? AccentBrush : SoftBorderBrush;
-        nv.ShapeEl.StrokeThickness = highlighted ? 2 : 1;
+        nv.ShapeEl.StrokeThickness = highlighted ? 3 : 1;
+        nv.ShapeEl.Effect = highlighted ? SelectedGlow : NodeShadow;
         var sel = _selected.Contains(nv.Model.Id) ? Visibility.Visible : Visibility.Collapsed;
         nv.Grip.Visibility = sel;
         nv.RotHandle.Visibility = sel;
@@ -1331,8 +1376,8 @@ public partial class MainWindow : Window
     void ClearConnSelection()
     {
         if (_selectedConn == null) return;
-        _selectedConn.Body.Stroke = ConnBrush;
-        _selectedConn.Arrow.Fill = ConnBrush;
+        _selectedConn.Body.Stroke = ConnStrokeOf(_selectedConn);
+        _selectedConn.Arrow.Fill = ConnStrokeOf(_selectedConn);
         _selectedConn = null;
     }
 
@@ -1466,6 +1511,7 @@ public partial class MainWindow : Window
         nv.Root.Width = m.W;
         nv.Root.Height = m.H;
         UpdateTextInsets(nv);
+        UpdateHandlePositions(nv);
         UpdateConnectionsFor(m.Id);
         MarkDirty();
     }
@@ -1500,7 +1546,7 @@ public partial class MainWindow : Window
             clones.Add(CreateNodeVisual(m));
         }
         foreach (var c in _conns.Where(c => map.ContainsKey(c.Model.From) && map.ContainsKey(c.Model.To)).ToList())
-            AddConnection(map[c.Model.From], map[c.Model.To], c.Model.FromAnchor, c.Model.ToAnchor);
+            AddConnection(map[c.Model.From], map[c.Model.To], c.Model.FromAnchor, c.Model.ToAnchor, c.Model.Color);
         ClearSelection();
         foreach (var nv in clones)
         {
@@ -1525,7 +1571,8 @@ public partial class MainWindow : Window
                 _clipboardConns.Add(new ConnectionModel
                 {
                     From = c.Model.From, To = c.Model.To,
-                    FromAnchor = c.Model.FromAnchor, ToAnchor = c.Model.ToAnchor
+                    FromAnchor = c.Model.FromAnchor, ToAnchor = c.Model.ToAnchor,
+                    Color = c.Model.Color
                 });
     }
 
@@ -1562,7 +1609,7 @@ public partial class MainWindow : Window
             created.Add(CreateNodeVisual(m));
         }
         foreach (var c in _clipboardConns)
-            AddConnection(map[c.From], map[c.To], c.FromAnchor, c.ToAnchor);
+            AddConnection(map[c.From], map[c.To], c.FromAnchor, c.ToAnchor, c.Color);
         ClearSelection();
         foreach (var nv in created)
         {
@@ -1607,34 +1654,36 @@ public partial class MainWindow : Window
 
     Ellipse MakeHandle(NodeVisual nv, Side side)
     {
-        var (ha, va, margin) = side switch
-        {
-            Side.Left => (HorizontalAlignment.Left, VerticalAlignment.Center, new Thickness(-7, 0, 0, 0)),
-            Side.Right => (HorizontalAlignment.Right, VerticalAlignment.Center, new Thickness(0, 0, -7, 0)),
-            Side.Top => (HorizontalAlignment.Center, VerticalAlignment.Top, new Thickness(0, -7, 0, 0)),
-            Side.Bottom => (HorizontalAlignment.Center, VerticalAlignment.Bottom, new Thickness(0, 0, 0, -7)),
-            Side.TopLeft => (HorizontalAlignment.Left, VerticalAlignment.Top, new Thickness(-7, -7, 0, 0)),
-            Side.TopRight => (HorizontalAlignment.Right, VerticalAlignment.Top, new Thickness(0, -7, -7, 0)),
-            Side.BottomLeft => (HorizontalAlignment.Left, VerticalAlignment.Bottom, new Thickness(-7, 0, 0, -7)),
-            _ => (HorizontalAlignment.Right, VerticalAlignment.Bottom, new Thickness(0, 0, -7, -7)),
-        };
         var el = new Ellipse
         {
             Width = 12, Height = 12,
             Fill = AccentBrush,
             Stroke = Brushes.White,
             StrokeThickness = 1.5,
-            HorizontalAlignment = ha,
-            VerticalAlignment = va,
-            Margin = margin,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
             Cursor = Cursors.Cross,
             Visibility = Visibility.Collapsed,
+            RenderTransformOrigin = new Point(0.5, 0.5),
+            RenderTransform = nv.HandleScaleT,
             ToolTip = "Drag onto another shape to connect"
         };
         el.MouseLeftButtonDown += (s, e) => { StartLink(nv, side, el); e.Handled = true; };
         el.MouseMove += (s, e) => Link_Move(el, e);
         el.MouseLeftButtonUp += (s, e) => Link_Up(el, e);
         return el;
+    }
+
+    // Position each connector dot on the shape outline; called on create/resize/reshape.
+    void UpdateHandlePositions(NodeVisual nv)
+    {
+        var m = nv.Model;
+        int i = 0;
+        foreach (Side side in Enum.GetValues<Side>())
+        {
+            var p = SideAnchorLocal(m, side);
+            nv.Handles[i++].Margin = new Thickness(p.X - m.X - 6, p.Y - m.Y - 6, 0, 0);
+        }
     }
 
     void ShowHandles(NodeVisual nv, bool show)
@@ -1671,7 +1720,17 @@ public partial class MainWindow : Window
     static Point SideAnchorM(NodeModel m, Side side) =>
         RotatePt(SideAnchorLocal(m, side), CenterOf(m), m.Rotation);
 
+    // Anchor pulled onto the actual outline so arrows and dots touch curved shapes
+    // (a bounding-box corner sits outside an ellipse or diamond).
     static Point SideAnchorLocal(NodeModel m, Side side)
+    {
+        var raw = SideAnchorRaw(m, side);
+        if (m.Shape == "Ellipse" || m.Shape == "Diamond")
+            return EdgePointLocal(m, CenterOf(m), raw);
+        return raw;
+    }
+
+    static Point SideAnchorRaw(NodeModel m, Side side)
     {
         return side switch
         {
@@ -1826,7 +1885,21 @@ public partial class MainWindow : Window
 
     // ---------- Connections ----------
 
-    ConnectionVisual AddConnection(Guid from, Guid to, string fromAnchor = null, string toAnchor = null)
+    Brush ConnStrokeOf(ConnectionVisual cv) =>
+        cv.Model.Color == null ? ConnBrush : BrushFrom(cv.Model.Color);
+
+    void SetConnColor(ConnectionVisual cv, string hex)
+    {
+        cv.Model.Color = hex;
+        if (_selectedConn != cv)
+        {
+            cv.Body.Stroke = ConnStrokeOf(cv);
+            cv.Arrow.Fill = ConnStrokeOf(cv);
+        }
+        MarkDirty();
+    }
+
+    ConnectionVisual AddConnection(Guid from, Guid to, string fromAnchor = null, string toAnchor = null, string color = null)
     {
         if (from == to) return null;
         if (!_nodes.ContainsKey(from) || !_nodes.ContainsKey(to)) return null;
@@ -1834,16 +1907,21 @@ public partial class MainWindow : Window
 
         var cv = new ConnectionVisual
         {
-            Model = new ConnectionModel { From = from, To = to, FromAnchor = fromAnchor, ToAnchor = toAnchor }
+            Model = new ConnectionModel { From = from, To = to, FromAnchor = fromAnchor, ToAnchor = toAnchor, Color = color }
         };
         cv.Body = new Line
         {
-            Stroke = ConnBrush, StrokeThickness = 2,
+            Stroke = ConnStrokeOf(cv), StrokeThickness = 2,
             StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
             IsHitTestVisible = false
         };
-        cv.Arrow = new Polygon { Fill = ConnBrush, IsHitTestVisible = false };
-        cv.Hit = new Line { Stroke = Brushes.Transparent, StrokeThickness = 14, Cursor = Cursors.Hand };
+        cv.Arrow = new Polygon { Fill = ConnStrokeOf(cv), IsHitTestVisible = false };
+        cv.Hit = new Line
+        {
+            Stroke = Brushes.Transparent,
+            StrokeThickness = Math.Max(10, 14 / Math.Max(0.2, _zoom)),
+            Cursor = Cursors.Hand
+        };
         Panel.SetZIndex(cv.Body, 2);
         Panel.SetZIndex(cv.Arrow, 2);
         Panel.SetZIndex(cv.Hit, 3);
@@ -1856,6 +1934,44 @@ public partial class MainWindow : Window
         cv.Hit.MouseRightButtonDown += (s, e) => SelectConnection(cv);
 
         var connMenu = new ContextMenu();
+        var colorMenu = new MenuItem { Header = "Color" };
+        foreach (var (name, hex) in new (string, string)[]
+        {
+            ("Default", null), ("Blue", "#4C6EF5"), ("Red", "#E5484D"), ("Orange", "#F59E0B"),
+            ("Green", "#2F9E68"), ("Purple", "#8B5CF6"), ("Black", "#1F2328"), ("White", "#FFFFFF")
+        })
+        {
+            var chosen = hex;
+            var header = new StackPanel { Orientation = Orientation.Horizontal };
+            header.Children.Add(new Border
+            {
+                Width = 14, Height = 14,
+                CornerRadius = new CornerRadius(4),
+                Background = chosen == null ? ConnBrush : BrushFrom(chosen),
+                BorderBrush = SoftBorderBrush,
+                BorderThickness = new Thickness(1),
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            var nameText = new TextBlock { Text = name, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            nameText.SetResourceReference(TextBlock.ForegroundProperty, "Brush.Text");
+            header.Children.Add(nameText);
+            var item = new MenuItem { Header = header };
+            item.Click += (s, e) => SetConnColor(cv, chosen);
+            colorMenu.Items.Add(item);
+        }
+        var miCustomConn = new MenuItem { Header = "Custom…" };
+        miCustomConn.Click += (s, e) =>
+        {
+            Color initial;
+            try { initial = (Color)ColorConverter.ConvertFromString(cv.Model.Color ?? "#8895A7"); }
+            catch { initial = Colors.Gray; }
+            var dlg = new ColorPickerWindow(initial) { Owner = this };
+            if (dlg.ShowDialog() == true)
+                SetConnColor(cv, $"#{dlg.SelectedColor.R:X2}{dlg.SelectedColor.G:X2}{dlg.SelectedColor.B:X2}");
+        };
+        colorMenu.Items.Add(miCustomConn);
+        connMenu.Items.Add(colorMenu);
+
         var miReverse = new MenuItem { Header = "Reverse direction" };
         miReverse.Click += (s, e) =>
         {
@@ -1979,10 +2095,10 @@ public partial class MainWindow : Window
     static (int, int) CellAt(Point p) =>
         ((int)Math.Floor(p.X / GridSize), (int)Math.Floor(p.Y / GridSize));
 
-    // Low-level cell write; hex == null clears the cell. No undo recording.
-    void SetCell((int, int) key, string hex)
+    // Low-level cell write; null clears the cell. No undo recording.
+    void SetCell((int, int) key, CellData? data)
     {
-        if (hex == null)
+        if (data == null)
         {
             if (!_cellColors.Remove(key)) return;
             if (_cellRects.TryGetValue(key, out var old))
@@ -1993,13 +2109,12 @@ public partial class MainWindow : Window
             MarkDirty();
             return;
         }
-        _cellColors[key] = hex;
+        _cellColors[key] = data.Value;
         if (!_cellRects.TryGetValue(key, out var r))
         {
             r = new Rectangle
             {
                 Width = GridSize, Height = GridSize,
-                Opacity = 0.5,
                 IsHitTestVisible = false
             };
             Canvas.SetLeft(r, key.Item1 * GridSize);
@@ -2008,18 +2123,21 @@ public partial class MainWindow : Window
             World.Children.Add(r);
             _cellRects[key] = r;
         }
-        r.Fill = BrushFrom(hex);
+        r.Fill = BrushFrom(data.Value.Hex);
+        r.Opacity = data.Value.Op;
         MarkDirty();
     }
 
     // Recorded write that feeds the paint-undo stack.
-    void ApplyPaint((int, int) key, string hex)
+    void ApplyPaint((int, int) key, CellData? data)
     {
-        _cellColors.TryGetValue(key, out var before);
-        if (before == hex) return;
-        _activeOp?.Changes.Add((key, before, hex));
-        SetCell(key, hex);
+        CellData? before = _cellColors.TryGetValue(key, out var b) ? b : null;
+        if (Nullable.Equals(before, data)) return;
+        _activeOp?.Changes.Add((key, before, data));
+        SetCell(key, data);
     }
+
+    CellData PaintData() => new(_lastColor, PaintOpacity.Value);
 
     void BeginPaintOp() => _activeOp = new PaintOp();
 
@@ -2053,10 +2171,11 @@ public partial class MainWindow : Window
     {
         double dist = (to - from).Length;
         int steps = Math.Max(1, (int)(dist / (GridSize / 2)));
+        CellData? d = erase ? null : PaintData();
         for (int i = 0; i <= steps; i++)
         {
             var p = from + (to - from) * (i / (double)steps);
-            ApplyPaint(CellAt(p), erase ? null : _lastColor);
+            ApplyPaint(CellAt(p), d);
         }
     }
 
@@ -2064,9 +2183,10 @@ public partial class MainWindow : Window
     {
         int cx1 = (int)Math.Floor(r.X / GridSize), cy1 = (int)Math.Floor(r.Y / GridSize);
         int cx2 = (int)Math.Floor((r.Right - 0.01) / GridSize), cy2 = (int)Math.Floor((r.Bottom - 0.01) / GridSize);
+        CellData? d = erase ? null : PaintData();
         for (int cx = cx1; cx <= cx2; cx++)
             for (int cy = cy1; cy <= cy2; cy++)
-                ApplyPaint((cx, cy), erase ? null : _lastColor);
+                ApplyPaint((cx, cy), d);
     }
 
     void StartAreaPaint(Point at, bool erase)
@@ -2077,7 +2197,7 @@ public partial class MainWindow : Window
         _areaRect = new Rectangle
         {
             Width = 0, Height = 0,
-            Opacity = 0.45,
+            Opacity = erase ? 0.45 : Math.Max(0.2, PaintOpacity.Value * 0.9),
             Fill = erase ? new SolidColorBrush(Color.FromArgb(0x60, 0x88, 0x88, 0x88)) : BrushFrom(_lastColor),
             Stroke = erase ? new SolidColorBrush(Color.FromRgb(0xE5, 0x48, 0x4D)) : AccentBrush,
             StrokeThickness = Math.Max(0.5, 1.5 / _zoom),
@@ -2099,8 +2219,9 @@ public partial class MainWindow : Window
         var r = new Rect(Canvas.GetLeft(_areaRect), Canvas.GetTop(_areaRect), _areaRect.Width, _areaRect.Height);
         World.Children.Remove(_areaRect);
         _areaRect = null;
+        _erasePendingStart = false;
         if (r.Width < 1 && r.Height < 1)
-            ApplyPaint(CellAt(_areaStart), _areaErase ? null : _lastColor);
+            ApplyPaint(CellAt(_areaStart), _areaErase ? null : PaintData());
         else
             FillCellArea(r, _areaErase);
     }
@@ -2108,20 +2229,10 @@ public partial class MainWindow : Window
     void World_MouseRightButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (PaintToggle.IsChecked != true || e.OriginalSource != World) return;
-        BeginPaintOp();
-        var p = e.GetPosition(World);
-        if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
-        {
-            _erasing = true;
-            _lastPaintWorld = p;
-            PaintStroke(p, p, erase: true);
-            World.CaptureMouse();
-        }
-        else
-        {
-            StartAreaPaint(p, erase: true);
-        }
-        e.Handled = true;
+        // Defer: a right-drag erases, but a plain right-click should still
+        // open the canvas context menu, so wait for movement first.
+        _erasePendingStart = true;
+        _erasePressPos = e.GetPosition(World);
     }
 
     void World_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
@@ -2133,11 +2244,16 @@ public partial class MainWindow : Window
             e.Handled = true;
             return;
         }
-        if (!_erasing) return;
-        _erasing = false;
-        World.ReleaseMouseCapture();
-        EndPaintOp();
-        e.Handled = true;
+        if (_erasing)
+        {
+            _erasing = false;
+            World.ReleaseMouseCapture();
+            EndPaintOp();
+            e.Handled = true;
+            return;
+        }
+        // No drag happened: let the context menu open normally.
+        _erasePendingStart = false;
     }
 
     // ---------- Canvas interaction ----------
@@ -2241,6 +2357,26 @@ public partial class MainWindow : Window
     {
         var p = e.GetPosition(World);
         _lastWorldMouse = p;
+
+        if (_erasePendingStart && (p - _erasePressPos).Length > 4)
+        {
+            // Right-drag confirmed: start erasing instead of showing the menu.
+            _erasePendingStart = false;
+            BeginPaintOp();
+            if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
+            {
+                _erasing = true;
+                _lastPaintWorld = _erasePressPos;
+                PaintStroke(_erasePressPos, p, erase: true);
+                _lastPaintWorld = p;
+                World.CaptureMouse();
+            }
+            else
+            {
+                StartAreaPaint(_erasePressPos, erase: true);
+            }
+            return;
+        }
 
         if (_painting || _erasing)
         {
@@ -2414,6 +2550,7 @@ public partial class MainWindow : Window
         Pan.X = viewportAnchor.X - wx * z;
         Pan.Y = viewportAnchor.Y - wy * z;
         UpdateZoomLabel();
+        UpdateHandleScale();
     }
 
     void ZoomAtCenter(double factor) =>
@@ -2442,6 +2579,7 @@ public partial class MainWindow : Window
         Pan.X = Viewport.ActualWidth / 2 - (b.X + b.Width / 2) * z;
         Pan.Y = Viewport.ActualHeight / 2 - (b.Y + b.Height / 2) * z;
         UpdateZoomLabel();
+        UpdateHandleScale();
     }
 
     void ResetView()
@@ -2450,6 +2588,7 @@ public partial class MainWindow : Window
         Scale.ScaleX = Scale.ScaleY = 1;
         CenterOnWorld(WorldSize / 2, WorldSize / 2);
         UpdateZoomLabel();
+        UpdateHandleScale();
     }
 
     void CenterOnWorld(double wx, double wy)

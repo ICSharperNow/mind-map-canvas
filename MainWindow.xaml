@@ -106,6 +106,9 @@
                 </ToggleButton>
                 <Button x:Name="UndoPaintBtn" Style="{StaticResource ToolBtn}" Width="34" Padding="0,6" Content="↩"
                         ToolTip="Undo painting (Ctrl+Z)" IsEnabled="False" Click="UndoPaint_Click"/>
+                <Slider x:Name="PaintOpacity" Width="70" Minimum="0.15" Maximum="1" Value="0.5"
+                        VerticalAlignment="Center" Margin="4,0,0,0"
+                        ToolTip="Paint opacity for newly painted cells"/>
                 <Border Width="1" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
 
                 <Button x:Name="ShapeBtn" Style="{StaticResource ToolBtn}" Click="ShapeBtn_Click"
