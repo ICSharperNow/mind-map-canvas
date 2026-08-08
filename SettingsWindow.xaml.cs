@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 
 namespace MindMapCanvas;
@@ -20,7 +21,7 @@ public partial class SettingsWindow : Window
                 {
                     Width = 16, Height = 16,
                     Margin = new Thickness(2, 0, 2, 0),
-                    CornerRadius = new CornerRadius(3),
+                    CornerRadius = new CornerRadius(4),
                     BorderBrush = new SolidColorBrush(theme.PanelBorder),
                     BorderThickness = new Thickness(1),
                     Background = new SolidColorBrush(c)
@@ -56,6 +57,16 @@ public partial class SettingsWindow : Window
             };
             ThemeList.Children.Add(rb);
         }
+    }
+
+    void Window_Drag(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ButtonState == MouseButtonState.Pressed) DragMove();
+    }
+
+    void Window_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape) Close();
     }
 
     void Close_Click(object sender, RoutedEventArgs e) => Close();

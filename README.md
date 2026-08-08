@@ -22,10 +22,11 @@ Or open the folder in Visual Studio 2022+ and press F5.
 - **Sticky notes**: double-click the canvas to create, double-click a note to edit
   (Enter commits, Shift+Enter inserts a newline, Esc cancels)
 - **Move & resize**: drag notes (grid snapping optional), resize via the corner grip
-- **Connections**: toggle Connect mode (toolbar or `C`), click a source note then a target
+- **Connections**: hover a note and drag one of the four side connector dots onto another
   note to draw an arrow; click an arrow to select it, `Del` to remove
 - **Multi-select**: drag a box on empty canvas, Ctrl+click to toggle, Ctrl+A for all
-- **Colors**: 8-swatch palette applies to all selected notes; new notes reuse the last color
+- **Colors**: 16-swatch palette plus a full custom color picker (hue strip,
+  saturation/value area, hex input); applies to all selected notes and is reused for new ones
 - **Duplicate** (Ctrl+D) clones selected notes and the connections between them
 - **Save / Open** boards as JSON (Ctrl+S / Ctrl+O), unsaved-changes prompt on close
 - **Export PNG** of the whole board
@@ -44,7 +45,7 @@ Or open the folder in Visual Studio 2022+ and press F5.
 | Resize note | Drag bottom-right grip (visible when selected) |
 | Box select | Drag on empty canvas |
 | Toggle select | Ctrl+click |
-| Connect notes | `C` (or ⤳ Connect), click source then target |
+| Connect notes | Hover note, drag a side dot onto another note |
 | Pan | Middle-drag, or hold Space + drag |
 | Zoom | Mouse wheel (anchored at cursor), Ctrl +/−, Fit, 100% |
 | Nudge | Arrow keys (Shift = 1px steps) |

@@ -5,46 +5,41 @@
         Height="820" Width="1320"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource Brush.WindowBg}"
+        FontFamily="Segoe UI Variable Text, Segoe UI"
         PreviewKeyDown="Window_PreviewKeyDown"
         PreviewKeyUp="Window_PreviewKeyUp"
         Loaded="Window_Loaded"
         Closing="Window_Closing">
-    <Window.Resources>
-        <!-- Submenu popups keep the system's light background, so their text stays dark in every theme. -->
-        <Style x:Key="SubItem" TargetType="MenuItem">
-            <Setter Property="Foreground" Value="#1F2328"/>
-        </Style>
-    </Window.Resources>
     <DockPanel>
 
         <!-- Menu bar -->
         <Border DockPanel.Dock="Top" Background="{DynamicResource Brush.PanelBg}"
                 BorderBrush="{DynamicResource Brush.PanelBorder}" BorderThickness="0,0,0,1">
-            <Menu Background="Transparent" FontSize="13" Padding="4,2">
-                <MenuItem Header="_File" Foreground="{DynamicResource Brush.Text}">
-                    <MenuItem Header="_New" Click="New_Click" InputGestureText="Ctrl+N" Style="{StaticResource SubItem}"/>
-                    <MenuItem Header="_Open…" Click="Open_Click" InputGestureText="Ctrl+O" Style="{StaticResource SubItem}"/>
-                    <MenuItem Header="_Save" Click="Save_Click" InputGestureText="Ctrl+S" Style="{StaticResource SubItem}"/>
-                    <MenuItem Header="Save _As…" Click="SaveAs_Click" InputGestureText="Ctrl+Shift+S" Style="{StaticResource SubItem}"/>
+            <Menu Background="Transparent" Padding="4,1">
+                <MenuItem Header="_File" Style="{StaticResource MenuBarItem}">
+                    <MenuItem Header="_New" Click="New_Click" InputGestureText="Ctrl+N"/>
+                    <MenuItem Header="_Open…" Click="Open_Click" InputGestureText="Ctrl+O"/>
+                    <MenuItem Header="_Save" Click="Save_Click" InputGestureText="Ctrl+S"/>
+                    <MenuItem Header="Save _As…" Click="SaveAs_Click" InputGestureText="Ctrl+Shift+S"/>
                     <Separator/>
-                    <MenuItem Header="_Export PNG…" Click="Export_Click" Style="{StaticResource SubItem}"/>
+                    <MenuItem Header="_Export PNG…" Click="Export_Click"/>
                     <Separator/>
-                    <MenuItem Header="E_xit" Click="Exit_Click" InputGestureText="Alt+F4" Style="{StaticResource SubItem}"/>
+                    <MenuItem Header="E_xit" Click="Exit_Click" InputGestureText="Alt+F4"/>
                 </MenuItem>
-                <MenuItem Header="_Edit" Foreground="{DynamicResource Brush.Text}">
-                    <MenuItem Header="_Duplicate" Click="Duplicate_Click" InputGestureText="Ctrl+D" Style="{StaticResource SubItem}"/>
-                    <MenuItem Header="De_lete" Click="Delete_Click" InputGestureText="Del" Style="{StaticResource SubItem}"/>
+                <MenuItem Header="_Edit" Style="{StaticResource MenuBarItem}">
+                    <MenuItem Header="_Duplicate" Click="Duplicate_Click" InputGestureText="Ctrl+D"/>
+                    <MenuItem Header="De_lete" Click="Delete_Click" InputGestureText="Del"/>
                     <Separator/>
-                    <MenuItem Header="Select _All" Click="SelectAll_Click" InputGestureText="Ctrl+A" Style="{StaticResource SubItem}"/>
+                    <MenuItem Header="Select _All" Click="SelectAll_Click" InputGestureText="Ctrl+A"/>
                 </MenuItem>
-                <MenuItem Header="_View" Foreground="{DynamicResource Brush.Text}">
-                    <MenuItem Header="Zoom _In" Click="ZoomIn_Click" InputGestureText="Ctrl++" Style="{StaticResource SubItem}"/>
-                    <MenuItem Header="Zoom _Out" Click="ZoomOut_Click" InputGestureText="Ctrl+-" Style="{StaticResource SubItem}"/>
-                    <MenuItem Header="Zoom to _Fit" Click="Fit_Click" Style="{StaticResource SubItem}"/>
-                    <MenuItem Header="_Actual Size (100%)" Click="Zoom100_Click" InputGestureText="Ctrl+0" Style="{StaticResource SubItem}"/>
+                <MenuItem Header="_View" Style="{StaticResource MenuBarItem}">
+                    <MenuItem Header="Zoom _In" Click="ZoomIn_Click" InputGestureText="Ctrl++"/>
+                    <MenuItem Header="Zoom _Out" Click="ZoomOut_Click" InputGestureText="Ctrl+-"/>
+                    <MenuItem Header="Zoom to _Fit" Click="Fit_Click"/>
+                    <MenuItem Header="_Actual Size (100%)" Click="Zoom100_Click" InputGestureText="Ctrl+0"/>
                 </MenuItem>
-                <MenuItem Header="_Settings" Foreground="{DynamicResource Brush.Text}">
-                    <MenuItem Header="_Settings…" Click="Settings_Click" Style="{StaticResource SubItem}"/>
+                <MenuItem Header="_Settings" Style="{StaticResource MenuBarItem}">
+                    <MenuItem Header="_Settings…" Click="Settings_Click"/>
                 </MenuItem>
             </Menu>
         </Border>
@@ -59,13 +54,32 @@
                 <Border Width="1" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
 
                 <Button Style="{StaticResource ToolBtn}" Click="AddNote_Click" Content="＋ Note" ToolTip="Add a sticky note (or double-click the canvas)"/>
-                <ToggleButton x:Name="ConnectToggle" Style="{StaticResource ToolToggle}" Content="⤳ Connect"
-                              ToolTip="Connect mode (C): click one note, then another"
-                              Checked="ConnectToggle_Changed" Unchecked="ConnectToggle_Changed"/>
                 <Button Style="{StaticResource ToolBtn}" Click="Delete_Click" Content="🗑 Delete" ToolTip="Delete selection (Del)"/>
                 <Border Width="1" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
 
-                <StackPanel x:Name="SwatchPanel" Orientation="Horizontal" VerticalAlignment="Center"/>
+                <Button x:Name="ColorBtn" Style="{StaticResource ToolBtn}" Click="ColorBtn_Click" ToolTip="Note color">
+                    <StackPanel Orientation="Horizontal">
+                        <Border x:Name="CurrentColorSwatch" Width="16" Height="16" CornerRadius="8"
+                                Background="#FFF9B1" BorderBrush="#40000000" BorderThickness="1"
+                                VerticalAlignment="Center"/>
+                        <TextBlock Text="Color ▾" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+                <Popup x:Name="ColorPopup" PlacementTarget="{Binding ElementName=ColorBtn}" Placement="Bottom"
+                       StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+                    <Border Background="{DynamicResource Brush.PanelBg}"
+                            BorderBrush="{DynamicResource Brush.PanelBorder}"
+                            BorderThickness="1" CornerRadius="10" Padding="10" Margin="10">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="18" ShadowDepth="3" Opacity="0.30"/>
+                        </Border.Effect>
+                        <StackPanel>
+                            <WrapPanel x:Name="PaletteWrap" Width="208"/>
+                            <Button Content="Custom color…" Style="{StaticResource ToolBtn}" Margin="0,8,0,0"
+                                    HorizontalContentAlignment="Center" Click="CustomColor_Click"/>
+                        </StackPanel>
+                    </Border>
+                </Popup>
                 <Border Width="1" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
 
                 <CheckBox x:Name="SnapCheck" Content="Snap to grid" IsChecked="True" VerticalAlignment="Center"
@@ -88,7 +102,7 @@
         <Border DockPanel.Dock="Bottom" Background="{DynamicResource Brush.PanelBg}"
                 BorderBrush="{DynamicResource Brush.PanelBorder}" BorderThickness="0,1,0,0" Padding="10,4">
             <TextBlock FontSize="12" Foreground="{DynamicResource Brush.SubtleText}"
-                       Text="Double-click canvas: add note  •  Double-click note: edit  •  Drag: move / box-select  •  Wheel: zoom  •  Space or middle-drag: pan  •  C: connect  •  Del: delete  •  Ctrl+D: duplicate"/>
+                       Text="Double-click canvas: add note  •  Double-click note: edit  •  Hover a note and drag a side dot onto another note: connect  •  Drag: move / box-select  •  Wheel: zoom  •  Space or middle-drag: pan  •  Del: delete  •  Ctrl+D: duplicate"/>
         </Border>
 
         <!-- Board -->
