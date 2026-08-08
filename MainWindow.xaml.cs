@@ -2143,8 +2143,17 @@ public partial class MainWindow : Window
         {
             var old = _linkHover;
             _linkHover = target;
-            if (old != null) RefreshNodeChrome(old);
-            if (target != null) RefreshNodeChrome(target);
+            if (old != null)
+            {
+                RefreshNodeChrome(old);
+                ShowHandles(old, false);
+            }
+            if (target != null)
+            {
+                RefreshNodeChrome(target);
+                // Reveal every dot the connection could snap to on the target.
+                ShowHandles(target, true);
+            }
         }
 
         if (target != null)
@@ -2218,7 +2227,11 @@ public partial class MainWindow : Window
         _linkSource = null;
         var hover = _linkHover;
         _linkHover = null;
-        if (hover != null) RefreshNodeChrome(hover);
+        if (hover != null)
+        {
+            RefreshNodeChrome(hover);
+            if (!hover.Root.IsMouseOver) ShowHandles(hover, false);
+        }
     }
 
     NodeVisual HitNode(Point p, NodeVisual exclude)
