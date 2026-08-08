@@ -24,6 +24,9 @@
             <TextBlock Text="THEME" FontSize="11" FontWeight="SemiBold" Opacity="0.8"
                        Foreground="{DynamicResource Brush.SubtleText}" Margin="0,16,0,6"/>
             <WrapPanel x:Name="ThemeList"/>
+            <TextBlock Text="Custom: click its three swatches to pick your own panel, canvas, and accent colors."
+                       FontSize="11" Foreground="{DynamicResource Brush.SubtleText}"
+                       TextWrapping="Wrap" Margin="2,4,0,0"/>
 
             <TextBlock Text="CANVAS" FontSize="11" FontWeight="SemiBold" Opacity="0.8"
                        Foreground="{DynamicResource Brush.SubtleText}" Margin="0,16,0,6"/>

@@ -12,6 +12,9 @@ public class AppSettings
     public string LastColor { get; set; } = "#FFF9B1";
     public string LastShape { get; set; } = "Rect";
     public List<string> CustomColors { get; set; } = new();
+    public string CustomPanel { get; set; } = "#2B3442";
+    public string CustomCanvas { get; set; } = "#26303C";
+    public string CustomAccent { get; set; } = "#7FA3E0";
 }
 
 public static class SettingsStore

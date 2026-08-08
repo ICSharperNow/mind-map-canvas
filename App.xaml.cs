@@ -14,6 +14,6 @@ public partial class App : Application
             StartupFile = e.Args[0];
         var settings = SettingsStore.Load();
         ThemeManager.ShowGrid = settings.ShowGrid;
-        ThemeManager.Apply(ThemeManager.ByName(settings.Theme));
+        ThemeManager.Apply(ThemeManager.Resolve(settings));
     }
 }

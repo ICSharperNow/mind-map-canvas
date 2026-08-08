@@ -156,8 +156,17 @@ public partial class MainWindow : Window
     // Painted grid cells, keyed by (column, row).
     readonly Dictionary<(int, int), string> _cellColors = new();
     readonly Dictionary<(int, int), Rectangle> _cellRects = new();
-    bool _painting, _erasing;
-    Point _lastPaintWorld;
+    bool _painting, _erasing, _areaPainting, _areaErase;
+    Point _lastPaintWorld, _areaStart;
+    Rectangle _areaRect;
+
+    sealed class PaintOp
+    {
+        public readonly List<((int, int) Key, string Before, string After)> Changes = new();
+    }
+
+    readonly List<PaintOp> _paintUndo = new();
+    PaintOp _activeOp;
 
     readonly List<NodeModel> _clipboardNodes = new();
     readonly List<ConnectionModel> _clipboardConns = new();
@@ -428,7 +437,7 @@ public partial class MainWindow : Window
         foreach (var c in doc.Connections) AddConnection(c.From, c.To, c.FromAnchor, c.ToAnchor);
         if (doc.Cells != null)
             foreach (var cell in doc.Cells)
-                PaintCell((cell.X, cell.Y), cell.Color);
+                SetCell((cell.X, cell.Y), cell.Color);
         _currentFile = path;
         _dirty = false;
         UpdateTitle();
@@ -468,6 +477,11 @@ public partial class MainWindow : Window
         _cellRects.Clear();
         _painting = false;
         _erasing = false;
+        _areaPainting = false;
+        _areaRect = null;
+        _paintUndo.Clear();
+        _activeOp = null;
+        UpdateUndoBtn();
     }
 
     void MarkDirty()
@@ -1605,9 +1619,20 @@ public partial class MainWindow : Window
     static (int, int) CellAt(Point p) =>
         ((int)Math.Floor(p.X / GridSize), (int)Math.Floor(p.Y / GridSize));
 
-    void PaintCell((int, int) key, string hex)
+    // Low-level cell write; hex == null clears the cell. No undo recording.
+    void SetCell((int, int) key, string hex)
     {
-        if (_cellColors.TryGetValue(key, out var existing) && existing == hex) return;
+        if (hex == null)
+        {
+            if (!_cellColors.Remove(key)) return;
+            if (_cellRects.TryGetValue(key, out var old))
+            {
+                World.Children.Remove(old);
+                _cellRects.Remove(key);
+            }
+            MarkDirty();
+            return;
+        }
         _cellColors[key] = hex;
         if (!_cellRects.TryGetValue(key, out var r))
         {
@@ -1627,16 +1652,41 @@ public partial class MainWindow : Window
         MarkDirty();
     }
 
-    void EraseCell((int, int) key)
+    // Recorded write that feeds the paint-undo stack.
+    void ApplyPaint((int, int) key, string hex)
     {
-        if (!_cellColors.Remove(key)) return;
-        if (_cellRects.TryGetValue(key, out var r))
-        {
-            World.Children.Remove(r);
-            _cellRects.Remove(key);
-        }
-        MarkDirty();
+        _cellColors.TryGetValue(key, out var before);
+        if (before == hex) return;
+        _activeOp?.Changes.Add((key, before, hex));
+        SetCell(key, hex);
     }
+
+    void BeginPaintOp() => _activeOp = new PaintOp();
+
+    void EndPaintOp()
+    {
+        if (_activeOp != null && _activeOp.Changes.Count > 0)
+        {
+            _paintUndo.Add(_activeOp);
+            if (_paintUndo.Count > 50) _paintUndo.RemoveAt(0);
+        }
+        _activeOp = null;
+        UpdateUndoBtn();
+    }
+
+    void UpdateUndoBtn() => UndoPaintBtn.IsEnabled = _paintUndo.Count > 0;
+
+    void UndoPaint()
+    {
+        if (_paintUndo.Count == 0) return;
+        var op = _paintUndo[^1];
+        _paintUndo.RemoveAt(_paintUndo.Count - 1);
+        for (int i = op.Changes.Count - 1; i >= 0; i--)
+            SetCell(op.Changes[i].Key, op.Changes[i].Before);
+        UpdateUndoBtn();
+    }
+
+    void UndoPaint_Click(object sender, RoutedEventArgs e) => UndoPaint();
 
     // Fill every cell along the drag segment so fast strokes leave no gaps.
     void PaintStroke(Point from, Point to, bool erase)
@@ -1646,27 +1696,87 @@ public partial class MainWindow : Window
         for (int i = 0; i <= steps; i++)
         {
             var p = from + (to - from) * (i / (double)steps);
-            var key = CellAt(p);
-            if (erase) EraseCell(key);
-            else PaintCell(key, _lastColor);
+            ApplyPaint(CellAt(p), erase ? null : _lastColor);
         }
+    }
+
+    void FillCellArea(Rect r, bool erase)
+    {
+        int cx1 = (int)Math.Floor(r.X / GridSize), cy1 = (int)Math.Floor(r.Y / GridSize);
+        int cx2 = (int)Math.Floor((r.Right - 0.01) / GridSize), cy2 = (int)Math.Floor((r.Bottom - 0.01) / GridSize);
+        for (int cx = cx1; cx <= cx2; cx++)
+            for (int cy = cy1; cy <= cy2; cy++)
+                ApplyPaint((cx, cy), erase ? null : _lastColor);
+    }
+
+    void StartAreaPaint(Point at, bool erase)
+    {
+        _areaPainting = true;
+        _areaErase = erase;
+        _areaStart = at;
+        _areaRect = new Rectangle
+        {
+            Width = 0, Height = 0,
+            Opacity = 0.45,
+            Fill = erase ? new SolidColorBrush(Color.FromArgb(0x60, 0x88, 0x88, 0x88)) : BrushFrom(_lastColor),
+            Stroke = erase ? new SolidColorBrush(Color.FromRgb(0xE5, 0x48, 0x4D)) : AccentBrush,
+            StrokeThickness = Math.Max(0.5, 1.5 / _zoom),
+            StrokeDashArray = new DoubleCollection { 4, 3 },
+            IsHitTestVisible = false
+        };
+        Canvas.SetLeft(_areaRect, at.X);
+        Canvas.SetTop(_areaRect, at.Y);
+        Panel.SetZIndex(_areaRect, 99999);
+        World.Children.Add(_areaRect);
+        World.CaptureMouse();
+    }
+
+    void FinishAreaPaint()
+    {
+        _areaPainting = false;
+        World.ReleaseMouseCapture();
+        if (_areaRect == null) return;
+        var r = new Rect(Canvas.GetLeft(_areaRect), Canvas.GetTop(_areaRect), _areaRect.Width, _areaRect.Height);
+        World.Children.Remove(_areaRect);
+        _areaRect = null;
+        if (r.Width < 1 && r.Height < 1)
+            ApplyPaint(CellAt(_areaStart), _areaErase ? null : _lastColor);
+        else
+            FillCellArea(r, _areaErase);
     }
 
     void World_MouseRightButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (PaintToggle.IsChecked != true || e.OriginalSource != World) return;
-        _erasing = true;
-        _lastPaintWorld = e.GetPosition(World);
-        PaintStroke(_lastPaintWorld, _lastPaintWorld, erase: true);
-        World.CaptureMouse();
+        BeginPaintOp();
+        var p = e.GetPosition(World);
+        if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
+        {
+            _erasing = true;
+            _lastPaintWorld = p;
+            PaintStroke(p, p, erase: true);
+            World.CaptureMouse();
+        }
+        else
+        {
+            StartAreaPaint(p, erase: true);
+        }
         e.Handled = true;
     }
 
     void World_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
     {
+        if (_areaPainting && _areaErase)
+        {
+            FinishAreaPaint();
+            EndPaintOp();
+            e.Handled = true;
+            return;
+        }
         if (!_erasing) return;
         _erasing = false;
         World.ReleaseMouseCapture();
+        EndPaintOp();
         e.Handled = true;
     }
 
@@ -1680,10 +1790,21 @@ public partial class MainWindow : Window
 
         if (PaintToggle.IsChecked == true)
         {
-            _painting = true;
-            _lastPaintWorld = e.GetPosition(World);
-            PaintStroke(_lastPaintWorld, _lastPaintWorld, erase: false);
-            World.CaptureMouse();
+            BeginPaintOp();
+            var pp = e.GetPosition(World);
+            if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
+            {
+                // Shift+drag: freehand brush, one cell at a time.
+                _painting = true;
+                _lastPaintWorld = pp;
+                PaintStroke(pp, pp, erase: false);
+                World.CaptureMouse();
+            }
+            else
+            {
+                // Default: drag out a whole area to fill.
+                StartAreaPaint(pp, erase: false);
+            }
             e.Handled = true;
             return;
         }
@@ -1768,6 +1889,15 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (_areaPainting && _areaRect != null)
+        {
+            Canvas.SetLeft(_areaRect, Math.Min(p.X, _areaStart.X));
+            Canvas.SetTop(_areaRect, Math.Min(p.Y, _areaStart.Y));
+            _areaRect.Width = Math.Abs(p.X - _areaStart.X);
+            _areaRect.Height = Math.Abs(p.Y - _areaStart.Y);
+            return;
+        }
+
         if (_rubberBanding && _rubberRect != null)
         {
             Canvas.SetLeft(_rubberRect, Math.Min(p.X, _rubberStart.X));
@@ -1787,10 +1917,19 @@ public partial class MainWindow : Window
 
     void World_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
+        if (_areaPainting && !_areaErase)
+        {
+            FinishAreaPaint();
+            EndPaintOp();
+            e.Handled = true;
+            return;
+        }
+
         if (_painting)
         {
             _painting = false;
             World.ReleaseMouseCapture();
+            EndPaintOp();
             e.Handled = true;
             return;
         }
@@ -2005,6 +2144,7 @@ public partial class MainWindow : Window
                 case Key.S: if (shift) SaveAs(); else Save(); e.Handled = true; break;
                 case Key.A: SelectAllNodes(); e.Handled = true; break;
                 case Key.D: DuplicateSelected(); e.Handled = true; break;
+                case Key.Z: UndoPaint(); e.Handled = true; break;
                 case Key.C: CopySelected(); e.Handled = true; break;
                 case Key.X: CutSelected(); e.Handled = true; break;
                 case Key.V: Paste(); e.Handled = true; break;

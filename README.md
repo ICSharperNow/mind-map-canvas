@@ -60,8 +60,9 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
 - **Zoom** 10%-400% with the wheel, anchored at the cursor; Fit and 100% shortcuts
 - Window resizing keeps the view centered on the same spot
 - **Snap to grid** toggle for tidy layouts
-- **Cell painting** (`P` or the Paint button): drag to highlight grid cells with the
-  current color - great for zoning the board; right-drag erases, saved with the file
+- **Cell painting** (`P` or the Paint button): drag to highlight a whole area of grid
+  cells with the current color - great for zoning the board; Shift+drag for a freehand
+  brush, right-drag to erase, Ctrl+Z (or the ↩ button) to undo; saved with the file
 
 ### Shapes
 - Nine shapes: **rectangle, pill, ellipse, diamond, hexagon, parallelogram, trapezoid,
@@ -93,8 +94,9 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
 - **Duplicate** (Ctrl+D), box-select (Shift+drag), select-all, multi-drag
 - **Save / Open** boards as human-readable JSON with an unsaved-changes guard
 - **Export** the whole board as **PNG, JPEG, PDF, BMP, or TIFF**
-- **Eight themes** (Light, Dark, Slate, Sepia, Midnight, Ocean, Forest, Rose) applied
-  live and remembered between runs
+- **Eight themes** (Light, Dark, Slate, Sepia, Midnight, Ocean, Forest, Rose) plus a
+  **custom theme**: pick your own panel, canvas, and accent colors and the rest of the
+  palette is derived automatically - applied live and remembered between runs
 - **Settings panel**: theme, grid visibility, default snap-to-grid, and whether the app
   remembers your last-used shape and color
 - **Right-click menus everywhere**: shapes (edit/duplicate/copy/cut/delete), connections
@@ -112,7 +114,8 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
 | Resize shape | Drag the corner resize grip |
 | Connect shapes | Hover a shape, drag any of its 8 dots onto another shape |
 | Pan | Drag empty canvas, middle-drag, or Space+drag |
-| Paint cells | `P` (or 🖌 Paint), drag to paint, right-drag to erase |
+| Paint cells | `P` (or 🖌 Paint), drag = fill area, Shift+drag = brush, right-drag = erase |
+| Undo painting | Ctrl+Z or the ↩ toolbar button |
 | Zoom | Mouse wheel, Ctrl +/−, Fit, 100% |
 | Box select | Shift+drag (Ctrl+drag adds to selection) |
 | Toggle select | Ctrl+click |

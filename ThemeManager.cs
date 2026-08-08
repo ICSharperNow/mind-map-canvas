@@ -106,6 +106,52 @@ public static class ThemeManager
     public static Theme ByName(string name) =>
         Themes.FirstOrDefault(t => t.Name == name) ?? Light;
 
+    /// <summary>Builds a full palette from three user-chosen colors.</summary>
+    public static Theme BuildCustom(Color panel, Color canvas, Color accent)
+    {
+        bool dark = Luma(panel) < 0.5;
+        var text = dark ? C("#E8ECF2") : C("#26292E");
+        return new Theme
+        {
+            Name = "Custom",
+            PanelBg = panel,
+            CanvasBg = canvas,
+            CheckedBorder = accent,
+            WindowBg = Mix(panel, dark ? Colors.Black : Colors.White, 0.25),
+            PanelBorder = Mix(panel, text, 0.16),
+            Text = text,
+            SubtleText = Mix(text, panel, 0.35),
+            CanvasOuter = Mix(canvas, Colors.Black, dark ? 0.35 : 0.08),
+            GridLine = Mix(canvas, text, 0.40),
+            Hover = Mix(panel, text, 0.07),
+            Pressed = Mix(panel, text, 0.14),
+            Checked = Mix(panel, accent, 0.30)
+        };
+    }
+
+    public static Theme Resolve(AppSettings s)
+    {
+        if (s.Theme == "Custom")
+        {
+            try
+            {
+                return BuildCustom(C(s.CustomPanel), C(s.CustomCanvas), C(s.CustomAccent));
+            }
+            catch
+            {
+                return Light;
+            }
+        }
+        return ByName(s.Theme);
+    }
+
+    static Color Mix(Color a, Color b, double t) => Color.FromRgb(
+        (byte)(a.R + (b.R - a.R) * t),
+        (byte)(a.G + (b.G - a.G) * t),
+        (byte)(a.B + (b.B - a.B) * t));
+
+    static double Luma(Color c) => (0.299 * c.R + 0.587 * c.G + 0.114 * c.B) / 255.0;
+
     public static void Apply(Theme t)
     {
         Current = t;
