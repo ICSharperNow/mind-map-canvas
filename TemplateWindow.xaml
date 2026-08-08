@@ -13,7 +13,7 @@
         <Border.Effect>
             <DropShadowEffect BlurRadius="26" ShadowDepth="4" Opacity="0.32"/>
         </Border.Effect>
-        <StackPanel Margin="22,18,22,18" Width="380">
+        <StackPanel Margin="22,18,22,18" Width="460">
             <Grid>
                 <TextBlock Text="Start from a template" FontSize="16" FontWeight="SemiBold"
                            Foreground="{DynamicResource Brush.Text}"/>

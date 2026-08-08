@@ -41,6 +41,7 @@ public class NodeModel
     public string ImageData { get; set; }          // base64 image for Image/Link previews
     public string ImageFit { get; set; } = "Fit";  // Fit | Fill | Stretch | Center
     public string Url { get; set; }
+    public bool AutoFit { get; set; }
 
     public NodeModel Clone(bool keepId = false) => new()
     {
@@ -50,7 +51,7 @@ public class NodeModel
         FontSize = FontSize, TextColor = TextColor, Align = Align,
         Bold = Bold, Italic = Italic,
         Rotation = Rotation, Kind = Kind, Opacity = Opacity, Font = Font,
-        ImageData = ImageData, ImageFit = ImageFit, Url = Url
+        ImageData = ImageData, ImageFit = ImageFit, Url = Url, AutoFit = AutoFit
     };
 }
 
@@ -374,29 +375,7 @@ public partial class MainWindow : Window
 
         BuildRecentSwatches();
 
-        foreach (var (cat, glyphs) in ClipartSets)
-        {
-            var head = new TextBlock
-            {
-                Text = cat.ToUpperInvariant(),
-                FontSize = 10,
-                FontWeight = FontWeights.SemiBold,
-                Opacity = 0.8,
-                Margin = new Thickness(4, 6, 0, 2)
-            };
-            head.SetResourceReference(TextBlock.ForegroundProperty, "Brush.SubtleText");
-            ClipartHost.Children.Add(head);
-            var wrap = new WrapPanel();
-            foreach (var g in glyphs)
-            {
-                var glyph = g;
-                var b = new Button { Content = glyph, Width = 36, Height = 34, Padding = new Thickness(0), FontSize = 17 };
-                b.SetResourceReference(StyleProperty, "ToolBtn");
-                b.Click += (s, a) => InsertClipart(glyph);
-                wrap.Children.Add(b);
-            }
-            ClipartHost.Children.Add(wrap);
-        }
+        BuildClipartGallery();
 
         // Right-click menu for empty canvas: paste and quick actions.
         var canvasMenu = new ContextMenu();
@@ -1042,6 +1021,18 @@ public partial class MainWindow : Window
             MarkDirty();
         };
         menu.Items.Add(miResetRot);
+        var miAutoFit = new MenuItem { Header = "Scale text with size" };
+        miAutoFit.Click += (s, e) =>
+        {
+            nv.Model.AutoFit = !nv.Model.AutoFit;
+            if (nv.Model.AutoFit)
+            {
+                nv.Model.FontSize = Math.Clamp(Math.Min(nv.Model.W, nv.Model.H) * 0.46, 8, 400);
+                ApplyTextStyle(nv);
+            }
+            MarkDirty();
+        };
+        menu.Items.Add(miAutoFit);
         var miEdit = new MenuItem { Header = "Edit text" };
         miEdit.Click += (s, e) => BeginEdit(nv);
         var miDup = new MenuItem { Header = "Duplicate", InputGestureText = "Ctrl+D" };
@@ -1076,7 +1067,11 @@ public partial class MainWindow : Window
         menu.Items.Add(new Separator());
         menu.Items.Add(miDel);
         root.ContextMenu = menu;
-        root.ContextMenuOpening += (s, e) => { if (!_selected.Contains(nv.Model.Id)) SelectOnly(nv); };
+        root.ContextMenuOpening += (s, e) =>
+        {
+            if (!_selected.Contains(nv.Model.Id)) SelectOnly(nv);
+            miAutoFit.Header = (nv.Model.AutoFit ? "✓ " : "") + "Scale text with size";
+        };
 
         UpdateTextInsets(nv);
         ApplyTextStyle(nv);
@@ -1128,8 +1123,47 @@ public partial class MainWindow : Window
         ("Misc", new[] { "⏰", "💰", "💲", "🏦", "📌", "🔒", "🔑", "🚩", "📍", "🎁" }),
     };
 
+    bool _clipartMono;
+
     void ClipartBtn_Click(object sender, RoutedEventArgs e) =>
         ClipartPopup.IsOpen = !ClipartPopup.IsOpen;
+
+    void ClipTab_Click(object sender, RoutedEventArgs e)
+    {
+        _clipartMono = ReferenceEquals(sender, ClipMonoTab);
+        ClipColorTab.IsChecked = !_clipartMono;
+        ClipMonoTab.IsChecked = _clipartMono;
+        BuildClipartGallery();
+    }
+
+    void BuildClipartGallery()
+    {
+        ClipartHost.Children.Clear();
+        foreach (var (cat, glyphs) in ClipartSets)
+        {
+            var head = new TextBlock
+            {
+                Text = cat.ToUpperInvariant(),
+                FontSize = 10,
+                FontWeight = FontWeights.SemiBold,
+                Opacity = 0.8,
+                Margin = new Thickness(4, 6, 0, 2)
+            };
+            head.SetResourceReference(TextBlock.ForegroundProperty, "Brush.SubtleText");
+            ClipartHost.Children.Add(head);
+            var wrap = new WrapPanel();
+            foreach (var g in glyphs)
+            {
+                var glyph = g;
+                var b = new Button { Content = glyph, Width = 36, Height = 34, Padding = new Thickness(0), FontSize = 17 };
+                if (_clipartMono) b.FontFamily = new FontFamily("Segoe UI Symbol");
+                b.SetResourceReference(StyleProperty, "ToolBtn");
+                b.Click += (s, a) => InsertClipart(glyph);
+                wrap.Children.Add(b);
+            }
+            ClipartHost.Children.Add(wrap);
+        }
+    }
 
     void InsertClipart(string glyph)
     {
@@ -1144,8 +1178,10 @@ public partial class MainWindow : Window
             FontSize = 44,
             W = 96, H = 96,
             X = c.X - 48, Y = c.Y - 48,
-            Align = "Center"
+            Align = "Center",
+            AutoFit = true
         };
+        if (_clipartMono) m.Font = "Segoe UI Symbol";
         if (SnapCheck.IsChecked == true) { m.X = Snap(m.X); m.Y = Snap(m.Y); }
         var nv = CreateNodeVisual(m);
         SelectOnly(nv);
@@ -1927,6 +1963,11 @@ public partial class MainWindow : Window
             m.H = Math.Max(GridSize * 2, Snap(m.H));
         }
         if (m.Shape == "Circle") m.W = m.H = Math.Max(m.W, m.H);
+        if (m.AutoFit)
+        {
+            m.FontSize = Math.Clamp(Math.Min(m.W, m.H) * 0.46, 8, 400);
+            ApplyTextStyle(nv);
+        }
         nv.Root.Width = m.W;
         nv.Root.Height = m.H;
         UpdateTextInsets(nv);

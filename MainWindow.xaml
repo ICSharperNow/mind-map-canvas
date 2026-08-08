@@ -197,9 +197,17 @@
                     <Border.Effect>
                         <DropShadowEffect BlurRadius="18" ShadowDepth="3" Opacity="0.30"/>
                     </Border.Effect>
-                    <ScrollViewer MaxHeight="340" VerticalScrollBarVisibility="Auto">
-                        <StackPanel x:Name="ClipartHost" Width="264"/>
-                    </ScrollViewer>
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                            <ToggleButton x:Name="ClipColorTab" Style="{StaticResource ToolToggle}" Content="Color"
+                                          IsChecked="True" Click="ClipTab_Click"/>
+                            <ToggleButton x:Name="ClipMonoTab" Style="{StaticResource ToolToggle}" Content="Black &amp; white"
+                                          Click="ClipTab_Click"/>
+                        </StackPanel>
+                        <ScrollViewer MaxHeight="340" VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="ClipartHost" Width="264"/>
+                        </ScrollViewer>
+                    </StackPanel>
                 </Border>
             </Popup>
 
