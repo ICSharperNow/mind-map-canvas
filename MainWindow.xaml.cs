@@ -785,7 +785,7 @@ public partial class MainWindow : Window
             BorderThickness = new Thickness(1.5),
             Cursor = Cursors.Hand,
             Visibility = Visibility.Collapsed,
-            ToolTip = "Drag to rotate (hold Shift for 15° steps)",
+            ToolTip = "Drag to rotate - snaps near 0°/45°/90°; hold Shift for 15° steps",
             Child = new TextBlock
             {
                 Text = "⟳",
@@ -1330,7 +1330,15 @@ public partial class MainWindow : Window
         var c = CenterOf(nv.Model);
         double angle = Math.Atan2(p.Y - c.Y, p.X - c.X) * 180.0 / Math.PI + 90.0;
         if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
+        {
             angle = Math.Round(angle / 15.0) * 15.0;
+        }
+        else
+        {
+            // Magnetic snap onto the axes and diagonals (0/45/90/...).
+            double nearest = Math.Round(angle / 45.0) * 45.0;
+            if (Math.Abs(angle - nearest) <= 4) angle = nearest;
+        }
         angle = ((angle % 360) + 360) % 360;
         nv.Model.Rotation = angle;
         nv.Rot.Angle = angle;
