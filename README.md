@@ -70,7 +70,9 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
   neatly inside each shape's outline
 - **Double-click** the canvas to place a shape, or **Alt+drag** to draw one at exactly
   the size you want
-- Move by dragging, resize via the corner grip, nudge with arrow keys
+- Move by dragging, resize via the corner grip, nudge with arrow keys, and **rotate**
+  with the handle above a selected shape (Shift snaps to 15° steps) - connections and
+  exports follow the rotation
 - **16-color palette plus a full HSV custom color picker** (hue strip,
   saturation/value area, hex input); custom colors are remembered and appear
   in the palette dropdown for reuse
@@ -83,6 +85,15 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
 - Right-click an arrow to reverse its direction or delete it
 - Arrows hug the true outline of ellipses and diamonds
 - Click an arrow to select it; `Del` removes it
+
+### Images & links
+- **Import images** (🖼 or File > Import image) straight onto the board - embedded in the
+  save file, resizable, rotatable, connectable like any shape
+- Image fit modes via right-click: **Fit, Fill, Stretch, Center**
+- **Import links** (🔗 or File > Import link): the page is loaded off-screen and a real
+  **preview screenshot** becomes the shape's content, with a domain banner; double-click
+  opens the link in your browser, right-click offers Open and Refresh preview
+  (falls back to a simple link card if the page can't load)
 
 ### Text
 - Double-click a shape to type; Enter commits, Shift+Enter adds a newline
@@ -112,6 +123,8 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
 | Format text | `Aa` dropdown with shapes selected |
 | Move shape(s) | Drag |
 | Resize shape | Drag the corner resize grip |
+| Rotate shape | Drag the handle above a selected shape (Shift = 15° steps) |
+| Import image / link | 🖼 / 🔗 toolbar buttons or File menu |
 | Connect shapes | Hover a shape, drag any of its 8 dots onto another shape |
 | Pan | Drag empty canvas, middle-drag, or Space+drag |
 | Paint cells | `P` (or 🖌 Paint), drag = fill area, Shift+drag = brush, right-drag = erase |

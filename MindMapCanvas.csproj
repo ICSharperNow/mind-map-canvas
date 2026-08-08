@@ -9,7 +9,7 @@
     <RootNamespace>MindMapCanvas</RootNamespace>
     <AssemblyName>MindMapCanvas</AssemblyName>
     <ApplicationIcon>Assets/app.ico</ApplicationIcon>
-    <Version>1.3.0</Version>
+    <Version>1.4.0</Version>
     <AssemblyTitle>MindMap Canvas</AssemblyTitle>
     <Product>MindMap Canvas</Product>
     <ApplicationManifest></ApplicationManifest>
@@ -20,5 +20,9 @@
          the MSI's own compression keeps the download small. -->
     <PublishReadyToRun>true</PublishReadyToRun>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
+  </ItemGroup>
 
 </Project>

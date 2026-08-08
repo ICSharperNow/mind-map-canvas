@@ -1,6 +1,8 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -31,6 +33,11 @@ public class NodeModel
     public string Align { get; set; } = "Center";
     public bool Bold { get; set; }
     public bool Italic { get; set; }
+    public double Rotation { get; set; }
+    public string Kind { get; set; } = "Shape";   // Shape | Image | Link
+    public string ImageData { get; set; }          // base64 image for Image/Link previews
+    public string ImageFit { get; set; } = "Fit";  // Fit | Fill | Stretch | Center
+    public string Url { get; set; }
 
     public NodeModel Clone(bool keepId = false) => new()
     {
@@ -38,7 +45,9 @@ public class NodeModel
         X = X, Y = Y, W = W, H = H,
         Text = Text, Color = Color, Shape = Shape,
         FontSize = FontSize, TextColor = TextColor, Align = Align,
-        Bold = Bold, Italic = Italic
+        Bold = Bold, Italic = Italic,
+        Rotation = Rotation, Kind = Kind,
+        ImageData = ImageData, ImageFit = ImageFit, Url = Url
     };
 }
 
@@ -73,6 +82,9 @@ public class NodeVisual
     public NodeModel Model;
     public Grid Root;
     public Shape ShapeEl;
+    public Image ImageEl;
+    public RotateTransform Rot;
+    public Ellipse RotHandle;
     public TextBlock Label;
     public TextBox Editor;
     public Thumb Grip;
@@ -685,16 +697,70 @@ public partial class MainWindow : Window
         shape.Stroke = SoftBorderBrush;
 
         var root = new Grid { Width = m.W, Height = m.H, Background = Brushes.Transparent };
+        var rot = new RotateTransform(m.Rotation);
+        root.RenderTransformOrigin = new Point(0.5, 0.5);
+        root.RenderTransform = rot;
         root.Children.Add(shape);
+
+        Image img = null;
+        if (m.Kind != "Shape" && !string.IsNullOrEmpty(m.ImageData))
+        {
+            img = new Image { Stretch = StretchOf(m.ImageFit), IsHitTestVisible = false, Margin = new Thickness(2) };
+            try { img.Source = ImageFromBase64(m.ImageData); } catch { }
+            root.Children.Add(img);
+        }
+        if (m.Kind == "Link")
+        {
+            var banner = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(0xB8, 0x10, 0x12, 0x18)),
+                VerticalAlignment = VerticalAlignment.Bottom,
+                Padding = new Thickness(7, 3, 7, 3),
+                IsHitTestVisible = false,
+                CornerRadius = new CornerRadius(0, 0, 6, 6),
+                Child = new TextBlock
+                {
+                    Text = "🔗 " + DomainOf(m.Url),
+                    FontSize = 11,
+                    Foreground = Brushes.White,
+                    TextTrimming = TextTrimming.CharacterEllipsis
+                }
+            };
+            root.Children.Add(banner);
+        }
+
         root.Children.Add(label);
         root.Children.Add(editor);
         root.Children.Add(grip);
+
+        var rotHandle = new Ellipse
+        {
+            Width = 14, Height = 14,
+            Fill = Brushes.White,
+            Stroke = AccentBrush,
+            StrokeThickness = 2,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, -26, 0, 0),
+            Cursor = Cursors.Hand,
+            Visibility = Visibility.Collapsed,
+            ToolTip = "Drag to rotate (hold Shift for 15° steps)"
+        };
+        root.Children.Add(rotHandle);
 
         Canvas.SetLeft(root, m.X);
         Canvas.SetTop(root, m.Y);
         Panel.SetZIndex(root, ++_zTop);
 
-        var nv = new NodeVisual { Model = m, Root = root, ShapeEl = shape, Label = label, Editor = editor, Grip = grip };
+        var nv = new NodeVisual
+        {
+            Model = m, Root = root, ShapeEl = shape, ImageEl = img, Rot = rot,
+            RotHandle = rotHandle, Label = label, Editor = editor, Grip = grip
+        };
+
+        rotHandle.MouseLeftButtonDown += (s, e) => { StartRotate(nv, rotHandle); e.Handled = true; };
+        rotHandle.MouseMove += (s, e) => Rotate_Move(nv, rotHandle, e);
+        rotHandle.MouseLeftButtonUp += (s, e) => Rotate_Up(rotHandle, e);
 
         // Side connector handles (Mural/Miro style): drag one onto another shape to link.
         foreach (Side side in Enum.GetValues<Side>())
@@ -717,6 +783,42 @@ public partial class MainWindow : Window
         grip.DragDelta += (s, e) => Grip_DragDelta(nv, e);
 
         var menu = new ContextMenu();
+        if (m.Kind == "Link")
+        {
+            var miOpen = new MenuItem { Header = "Open link in browser" };
+            miOpen.Click += (s, e) => OpenUrl(nv.Model.Url);
+            var miRefresh = new MenuItem { Header = "Refresh preview" };
+            miRefresh.Click += async (s, e) => await RefreshLinkPreview(nv);
+            menu.Items.Add(miOpen);
+            menu.Items.Add(miRefresh);
+            menu.Items.Add(new Separator());
+        }
+        if (m.Kind != "Shape")
+        {
+            var fit = new MenuItem { Header = "Image fit" };
+            foreach (var f in new[] { "Fit", "Fill", "Stretch", "Center" })
+            {
+                var mode = f;
+                var item = new MenuItem { Header = mode };
+                item.Click += (s, e) =>
+                {
+                    nv.Model.ImageFit = mode;
+                    if (nv.ImageEl != null) nv.ImageEl.Stretch = StretchOf(mode);
+                    MarkDirty();
+                };
+                fit.Items.Add(item);
+            }
+            menu.Items.Add(fit);
+        }
+        var miResetRot = new MenuItem { Header = "Reset rotation" };
+        miResetRot.Click += (s, e) =>
+        {
+            nv.Model.Rotation = 0;
+            nv.Rot.Angle = 0;
+            UpdateConnectionsFor(nv.Model.Id);
+            MarkDirty();
+        };
+        menu.Items.Add(miResetRot);
         var miEdit = new MenuItem { Header = "Edit text" };
         miEdit.Click += (s, e) => BeginEdit(nv);
         var miDup = new MenuItem { Header = "Duplicate", InputGestureText = "Ctrl+D" };
@@ -766,6 +868,189 @@ public partial class MainWindow : Window
         var wx = (Viewport.ActualWidth / 2 - Pan.X) / _zoom;
         var wy = (Viewport.ActualHeight / 2 - Pan.Y) / _zoom;
         CreateNoteAt(new Point(wx, wy));
+    }
+
+    // ---------- Media import ----------
+
+    Point ViewCenterWorld() => new(
+        (Viewport.ActualWidth / 2 - Pan.X) / _zoom,
+        (Viewport.ActualHeight / 2 - Pan.Y) / _zoom);
+
+    static Stretch StretchOf(string fit) => fit switch
+    {
+        "Fill" => Stretch.UniformToFill,
+        "Stretch" => Stretch.Fill,
+        "Center" => Stretch.None,
+        _ => Stretch.Uniform
+    };
+
+    static BitmapImage ImageFromBase64(string data)
+    {
+        var bi = new BitmapImage();
+        bi.BeginInit();
+        bi.StreamSource = new MemoryStream(Convert.FromBase64String(data));
+        bi.CacheOption = BitmapCacheOption.OnLoad;
+        bi.EndInit();
+        bi.Freeze();
+        return bi;
+    }
+
+    static string DomainOf(string url)
+    {
+        try { return new Uri(url).Host; }
+        catch { return url ?? ""; }
+    }
+
+    static void OpenUrl(string url)
+    {
+        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
+        catch { }
+    }
+
+    void ImportImage_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new OpenFileDialog
+        {
+            Filter = "Images (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif|All files (*.*)|*.*"
+        };
+        if (dlg.ShowDialog(this) != true) return;
+
+        byte[] bytes;
+        BitmapImage probe;
+        try
+        {
+            bytes = File.ReadAllBytes(dlg.FileName);
+            probe = ImageFromBase64(Convert.ToBase64String(bytes));
+        }
+        catch (Exception ex)
+        {
+            ModernDialog.Show(this, "Could not load image", ex.Message, "OK");
+            return;
+        }
+
+        double scale = Math.Min(1.0, 360.0 / Math.Max(probe.PixelWidth, probe.PixelHeight));
+        double w = Math.Max(NodeMinW, probe.PixelWidth * scale);
+        double h = Math.Max(NodeMinH, probe.PixelHeight * scale);
+        var center = ViewCenterWorld();
+        var m = new NodeModel
+        {
+            Kind = "Image",
+            ImageData = Convert.ToBase64String(bytes),
+            ImageFit = "Fit",
+            Color = "#FFFFFF",
+            Shape = "Rect",
+            X = center.X - w / 2, Y = center.Y - h / 2, W = w, H = h
+        };
+        if (SnapCheck.IsChecked == true) { m.X = Snap(m.X); m.Y = Snap(m.Y); }
+        var nv = CreateNodeVisual(m);
+        SelectOnly(nv);
+        MarkDirty();
+    }
+
+    async void ImportLink_Click(object sender, RoutedEventArgs e)
+    {
+        var url = InputDialog.Show(this, "Add link", "Web address:", "https://");
+        if (string.IsNullOrWhiteSpace(url) || url == "https://") return;
+        if (!url.Contains("://")) url = "https://" + url;
+
+        Mouse.OverrideCursor = Cursors.Wait;
+        byte[] shot = null;
+        try { shot = await CaptureUrlPreviewAsync(url); }
+        catch { }
+        finally { Mouse.OverrideCursor = null; }
+
+        var center = ViewCenterWorld();
+        var m = new NodeModel
+        {
+            Kind = "Link",
+            Url = url,
+            ImageFit = "Fill",
+            Color = "#FFFFFF",
+            Shape = "Rect",
+            X = center.X - 144, Y = center.Y - 108, W = 288, H = 216
+        };
+        if (shot != null)
+        {
+            m.ImageData = Convert.ToBase64String(shot);
+        }
+        else
+        {
+            // No WebView2 runtime or the page failed to load: fall back to a link card.
+            m.Color = "#A8D8F0";
+            m.Text = url;
+            m.H = 120;
+        }
+        if (SnapCheck.IsChecked == true) { m.X = Snap(m.X); m.Y = Snap(m.Y); }
+        var nv = CreateNodeVisual(m);
+        SelectOnly(nv);
+        MarkDirty();
+    }
+
+    async Task RefreshLinkPreview(NodeVisual nv)
+    {
+        Mouse.OverrideCursor = Cursors.Wait;
+        byte[] shot = null;
+        try { shot = await CaptureUrlPreviewAsync(nv.Model.Url); }
+        catch { }
+        finally { Mouse.OverrideCursor = null; }
+        if (shot == null)
+        {
+            ModernDialog.Show(this, "Preview failed",
+                "The page could not be loaded for a preview. Check the address and your connection.", "OK");
+            return;
+        }
+        nv.Model.ImageData = Convert.ToBase64String(shot);
+        var replacement = CreateReplacementVisual(nv);
+        MarkDirty();
+        SelectOnly(replacement);
+    }
+
+    // Rebuilds a node's visuals from its model (used when content changes shape).
+    NodeVisual CreateReplacementVisual(NodeVisual nv)
+    {
+        int z = Panel.GetZIndex(nv.Root);
+        World.Children.Remove(nv.Root);
+        _nodes.Remove(nv.Model.Id);
+        var fresh = CreateNodeVisual(nv.Model);
+        Panel.SetZIndex(fresh.Root, z);
+        UpdateConnectionsFor(fresh.Model.Id);
+        return fresh;
+    }
+
+    async Task<byte[]> CaptureUrlPreviewAsync(string url)
+    {
+        var wv = new Microsoft.Web.WebView2.Wpf.WebView2();
+        var host = new Window
+        {
+            Width = 1024, Height = 768,
+            WindowStyle = WindowStyle.None,
+            ShowInTaskbar = false,
+            ShowActivated = false,
+            Left = -30000, Top = -30000,
+            Content = wv
+        };
+        try
+        {
+            host.Show();
+            var env = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync(null,
+                IOPath.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "MindMapCanvas", "WebView2"));
+            await wv.EnsureCoreWebView2Async(env);
+            var tcs = new TaskCompletionSource<bool>();
+            wv.CoreWebView2.NavigationCompleted += (s, a) => tcs.TrySetResult(a.IsSuccess);
+            wv.CoreWebView2.Navigate(url);
+            var done = await Task.WhenAny(tcs.Task, Task.Delay(15000));
+            if (done != tcs.Task || !tcs.Task.Result) return null;
+            await Task.Delay(1500); // let images and layout settle
+            using var ms = new MemoryStream();
+            await wv.CoreWebView2.CapturePreviewAsync(
+                Microsoft.Web.WebView2.Core.CoreWebView2CapturePreviewImageFormat.Png, ms);
+            return ms.ToArray();
+        }
+        finally
+        {
+            host.Close();
+        }
     }
 
     static TextAlignment AlignOf(string a) => a switch
@@ -959,7 +1244,44 @@ public partial class MainWindow : Window
         bool highlighted = _selected.Contains(nv.Model.Id) || _linkHover == nv;
         nv.ShapeEl.Stroke = highlighted ? AccentBrush : SoftBorderBrush;
         nv.ShapeEl.StrokeThickness = highlighted ? 2 : 1;
-        nv.Grip.Visibility = _selected.Contains(nv.Model.Id) ? Visibility.Visible : Visibility.Collapsed;
+        var sel = _selected.Contains(nv.Model.Id) ? Visibility.Visible : Visibility.Collapsed;
+        nv.Grip.Visibility = sel;
+        nv.RotHandle.Visibility = sel;
+    }
+
+    // ---------- Rotation ----------
+
+    bool _rotating;
+
+    void StartRotate(NodeVisual nv, Ellipse handle)
+    {
+        CommitEdit();
+        if (!_selected.Contains(nv.Model.Id)) SelectOnly(nv);
+        _rotating = true;
+        handle.CaptureMouse();
+    }
+
+    void Rotate_Move(NodeVisual nv, Ellipse handle, MouseEventArgs e)
+    {
+        if (!_rotating || !handle.IsMouseCaptured) return;
+        var p = e.GetPosition(World);
+        var c = CenterOf(nv.Model);
+        double angle = Math.Atan2(p.Y - c.Y, p.X - c.X) * 180.0 / Math.PI + 90.0;
+        if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
+            angle = Math.Round(angle / 15.0) * 15.0;
+        angle = ((angle % 360) + 360) % 360;
+        nv.Model.Rotation = angle;
+        nv.Rot.Angle = angle;
+        UpdateConnectionsFor(nv.Model.Id);
+        MarkDirty();
+    }
+
+    void Rotate_Up(Ellipse handle, MouseButtonEventArgs e)
+    {
+        if (!_rotating) return;
+        _rotating = false;
+        handle.ReleaseMouseCapture();
+        e.Handled = true;
     }
 
     void SelectOnly(NodeVisual nv)
@@ -1078,7 +1400,10 @@ public partial class MainWindow : Window
 
         if (e.ClickCount == 2)
         {
-            BeginEdit(nv);
+            if (nv.Model.Kind == "Link" && !string.IsNullOrEmpty(nv.Model.Url))
+                OpenUrl(nv.Model.Url);
+            else
+                BeginEdit(nv);
             e.Handled = true;
             return;
         }
@@ -1318,9 +1643,35 @@ public partial class MainWindow : Window
         foreach (var h in nv.Handles) h.Visibility = vis;
     }
 
+    static Point CenterOf(NodeModel m) => new(m.X + m.W / 2, m.Y + m.H / 2);
+
+    static Point RotatePt(Point p, Point c, double deg)
+    {
+        if (deg == 0) return p;
+        double a = deg * Math.PI / 180.0, cos = Math.Cos(a), sin = Math.Sin(a);
+        double dx = p.X - c.X, dy = p.Y - c.Y;
+        return new Point(c.X + dx * cos - dy * sin, c.Y + dx * sin + dy * cos);
+    }
+
+    // Axis-aligned bounds of a (possibly rotated) node.
+    static Rect NodeBounds(NodeModel m)
+    {
+        if (m.Rotation == 0) return new Rect(m.X, m.Y, m.W, m.H);
+        var c = CenterOf(m);
+        var b = Rect.Empty;
+        b.Union(RotatePt(new Point(m.X, m.Y), c, m.Rotation));
+        b.Union(RotatePt(new Point(m.X + m.W, m.Y), c, m.Rotation));
+        b.Union(RotatePt(new Point(m.X, m.Y + m.H), c, m.Rotation));
+        b.Union(RotatePt(new Point(m.X + m.W, m.Y + m.H), c, m.Rotation));
+        return b;
+    }
+
     static Point SideAnchor(NodeVisual nv, Side side) => SideAnchorM(nv.Model, side);
 
-    static Point SideAnchorM(NodeModel m, Side side)
+    static Point SideAnchorM(NodeModel m, Side side) =>
+        RotatePt(SideAnchorLocal(m, side), CenterOf(m), m.Rotation);
+
+    static Point SideAnchorLocal(NodeModel m, Side side)
     {
         return side switch
         {
@@ -1580,8 +1931,17 @@ public partial class MainWindow : Window
     }
 
     // Arrows land on the actual shape outline for ellipses and diamonds,
-    // and on the bounding box for the rest.
+    // and on the bounding box for the rest. Rotation is handled by working
+    // in the node's local (unrotated) space and rotating the result back.
     static Point EdgePointFor(NodeModel m, Point from, Point to)
+    {
+        var c = CenterOf(m);
+        var toLocal = RotatePt(to, c, -m.Rotation);
+        var p = EdgePointLocal(m, from, toLocal);
+        return RotatePt(p, c, m.Rotation);
+    }
+
+    static Point EdgePointLocal(NodeModel m, Point from, Point to)
     {
         double dx = to.X - from.X, dy = to.Y - from.Y;
         if (Math.Abs(dx) < 1e-9 && Math.Abs(dy) < 1e-9) return from;
@@ -1983,7 +2343,7 @@ public partial class MainWindow : Window
         {
             ClearConnSelection();
             foreach (var nv in _nodes.Values)
-                if (r.IntersectsWith(new Rect(nv.Model.X, nv.Model.Y, nv.Model.W, nv.Model.H)))
+                if (r.IntersectsWith(NodeBounds(nv.Model)))
                 {
                     _selected.Add(nv.Model.Id);
                     RefreshNodeChrome(nv);
@@ -2104,7 +2464,7 @@ public partial class MainWindow : Window
     {
         var b = Rect.Empty;
         foreach (var nv in _nodes.Values)
-            b.Union(new Rect(nv.Model.X, nv.Model.Y, nv.Model.W, nv.Model.H));
+            b.Union(NodeBounds(nv.Model));
         foreach (var key in _cellColors.Keys)
             b.Union(new Rect(key.Item1 * GridSize, key.Item2 * GridSize, GridSize, GridSize));
         if (b.IsEmpty) return b;

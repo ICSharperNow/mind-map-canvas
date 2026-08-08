@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="MindMap Canvas"
         Height="820" Width="1320"
+        MinHeight="620" MinWidth="980"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource Brush.WindowBg}"
         FontFamily="Segoe UI Variable Text, Segoe UI"
@@ -21,6 +22,9 @@
                     <MenuItem Header="_Open…" Click="Open_Click" InputGestureText="Ctrl+O"/>
                     <MenuItem Header="_Save" Click="Save_Click" InputGestureText="Ctrl+S"/>
                     <MenuItem Header="Save _As…" Click="SaveAs_Click" InputGestureText="Ctrl+Shift+S"/>
+                    <Separator/>
+                    <MenuItem Header="Import _image…" Click="ImportImage_Click"/>
+                    <MenuItem Header="Import _link…" Click="ImportLink_Click"/>
                     <Separator/>
                     <MenuItem Header="_Export as">
                         <MenuItem Header="PNG image…" Tag="png" Click="ExportFormat_Click"/>
@@ -60,6 +64,8 @@
                 <Border Width="1" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
 
                 <Button Style="{StaticResource ToolBtn}" Click="AddNote_Click" Content="＋ Note" ToolTip="Add a sticky note (or double-click the canvas)"/>
+                <Button Style="{StaticResource ToolBtn}" Click="ImportImage_Click" Content="🖼 Image" ToolTip="Import an image onto the board"/>
+                <Button Style="{StaticResource ToolBtn}" Click="ImportLink_Click" Content="🔗 Link" ToolTip="Add a web link with a live page preview"/>
                 <Button Style="{StaticResource ToolBtn}" Click="Delete_Click" Content="🗑 Delete" ToolTip="Delete selection (Del)"/>
                 <Border Width="1" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
 
