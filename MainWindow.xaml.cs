@@ -89,7 +89,7 @@ public class NodeVisual
     public Shape ShapeEl;
     public Image ImageEl;
     public RotateTransform Rot;
-    public Ellipse RotHandle;
+    public FrameworkElement RotHandle;
     public TextBlock Label;
     public TextBox Editor;
     public Thumb Grip;
@@ -502,6 +502,8 @@ public partial class MainWindow : Window
         _areaRect = null;
         _paintUndo.Clear();
         _activeOp = null;
+        _guideV = null;
+        _guideH = null;
         UpdateUndoBtn();
     }
 
@@ -771,18 +773,29 @@ public partial class MainWindow : Window
         root.Children.Add(editor);
         root.Children.Add(grip);
 
-        var rotHandle = new Ellipse
+        var rotHandle = new Border
         {
-            Width = 14, Height = 14,
-            Fill = Brushes.White,
-            Stroke = AccentBrush,
-            StrokeThickness = 2,
+            Width = 18, Height = 18,
+            CornerRadius = new CornerRadius(9),
+            Background = Brushes.White,
+            BorderBrush = AccentBrush,
+            BorderThickness = new Thickness(1.5),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(0, -26, 0, 0),
+            Margin = new Thickness(0, -30, 0, 0),
             Cursor = Cursors.Hand,
             Visibility = Visibility.Collapsed,
-            ToolTip = "Drag to rotate (hold Shift for 15° steps)"
+            ToolTip = "Drag to rotate (hold Shift for 15° steps)",
+            Child = new TextBlock
+            {
+                Text = "⟳",
+                FontSize = 11,
+                FontWeight = FontWeights.Bold,
+                Foreground = AccentBrush,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, -1, 0, 0)
+            }
         };
         root.Children.Add(rotHandle);
 
@@ -1298,7 +1311,7 @@ public partial class MainWindow : Window
 
     bool _rotating;
 
-    void StartRotate(NodeVisual nv, Ellipse handle)
+    void StartRotate(NodeVisual nv, FrameworkElement handle)
     {
         CommitEdit();
         if (!_selected.Contains(nv.Model.Id)) SelectOnly(nv);
@@ -1306,7 +1319,7 @@ public partial class MainWindow : Window
         handle.CaptureMouse();
     }
 
-    void Rotate_Move(NodeVisual nv, Ellipse handle, MouseEventArgs e)
+    void Rotate_Move(NodeVisual nv, FrameworkElement handle, MouseEventArgs e)
     {
         if (!_rotating || !handle.IsMouseCaptured) return;
         var p = e.GetPosition(World);
@@ -1321,7 +1334,7 @@ public partial class MainWindow : Window
         MarkDirty();
     }
 
-    void Rotate_Up(Ellipse handle, MouseButtonEventArgs e)
+    void Rotate_Up(FrameworkElement handle, MouseButtonEventArgs e)
     {
         if (!_rotating) return;
         _rotating = false;
@@ -1478,25 +1491,118 @@ public partial class MainWindow : Window
         if (!_movedDuringDrag && Math.Abs(dx) < 2 && Math.Abs(dy) < 2) return;
         _movedDuringDrag = true;
 
-        bool snap = SnapCheck.IsChecked == true;
+        // Position the grabbed node (grid snap, then axis alignment against other
+        // shapes), then move the rest of the selection by the same final delta so
+        // relative layout is preserved.
+        var origin = _dragOrigins[nv.Model.Id];
+        double nx = origin.X + dx, ny = origin.Y + dy;
+        if (SnapCheck.IsChecked == true) { nx = Snap(nx); ny = Snap(ny); }
+        ApplyAlignmentSnap(nv, ref nx, ref ny);
+
+        double fdx = nx - origin.X, fdy = ny - origin.Y;
         foreach (var kv in _dragOrigins)
         {
             if (!_nodes.TryGetValue(kv.Key, out var n)) continue;
-            double nx = kv.Value.X + dx, ny = kv.Value.Y + dy;
-            if (snap) { nx = Snap(nx); ny = Snap(ny); }
-            n.Model.X = nx;
-            n.Model.Y = ny;
-            Canvas.SetLeft(n.Root, nx);
-            Canvas.SetTop(n.Root, ny);
+            n.Model.X = kv.Value.X + fdx;
+            n.Model.Y = kv.Value.Y + fdy;
+            Canvas.SetLeft(n.Root, n.Model.X);
+            Canvas.SetTop(n.Root, n.Model.Y);
             UpdateConnectionsFor(kv.Key);
         }
         MarkDirty();
+    }
+
+    // ---------- Alignment guides ----------
+
+    Line _guideV, _guideH;
+
+    void ApplyAlignmentSnap(NodeVisual nv, ref double nx, ref double ny)
+    {
+        double w = nv.Model.W, h = nv.Model.H;
+        double threshold = 8 / _zoom;
+        double bestDx = double.MaxValue, bestDy = double.MaxValue;
+        double guideX = 0, guideY = 0;
+        Rect otherX = Rect.Empty, otherY = Rect.Empty;
+
+        double[] mineX = { nx, nx + w / 2, nx + w };
+        double[] mineY = { ny, ny + h / 2, ny + h };
+        double[] tx = new double[3];
+        double[] ty = new double[3];
+
+        foreach (var other in _nodes.Values)
+        {
+            if (_selected.Contains(other.Model.Id)) continue;
+            var ob = NodeBounds(other.Model);
+            tx[0] = ob.X; tx[1] = ob.X + ob.Width / 2; tx[2] = ob.Right;
+            ty[0] = ob.Y; ty[1] = ob.Y + ob.Height / 2; ty[2] = ob.Bottom;
+            for (int i = 0; i < 3; i++)
+                for (int j = 0; j < 3; j++)
+                {
+                    double d = tx[j] - mineX[i];
+                    if (Math.Abs(d) < threshold && Math.Abs(d) < Math.Abs(bestDx))
+                    { bestDx = d; guideX = tx[j]; otherX = ob; }
+                    d = ty[j] - mineY[i];
+                    if (Math.Abs(d) < threshold && Math.Abs(d) < Math.Abs(bestDy))
+                    { bestDy = d; guideY = ty[j]; otherY = ob; }
+                }
+        }
+
+        if (bestDx != double.MaxValue)
+        {
+            nx += bestDx;
+            ShowGuide(ref _guideV, vertical: true, guideX, new Rect(nx, ny, w, h), otherX);
+        }
+        else HideGuide(ref _guideV);
+
+        if (bestDy != double.MaxValue)
+        {
+            ny += bestDy;
+            ShowGuide(ref _guideH, vertical: false, guideY, new Rect(nx, ny, w, h), otherY);
+        }
+        else HideGuide(ref _guideH);
+    }
+
+    void ShowGuide(ref Line guide, bool vertical, double at, Rect a, Rect b)
+    {
+        if (guide == null)
+        {
+            guide = new Line
+            {
+                Stroke = AccentBrush,
+                StrokeDashArray = new DoubleCollection { 4, 3 },
+                IsHitTestVisible = false
+            };
+            Panel.SetZIndex(guide, 99997);
+            World.Children.Add(guide);
+        }
+        guide.StrokeThickness = Math.Max(0.5, 1.2 / _zoom);
+        if (vertical)
+        {
+            guide.X1 = guide.X2 = at;
+            guide.Y1 = Math.Min(a.Y, b.Y) - 24;
+            guide.Y2 = Math.Max(a.Bottom, b.Bottom) + 24;
+        }
+        else
+        {
+            guide.Y1 = guide.Y2 = at;
+            guide.X1 = Math.Min(a.X, b.X) - 24;
+            guide.X2 = Math.Max(a.Right, b.Right) + 24;
+        }
+    }
+
+    void HideGuide(ref Line guide)
+    {
+        if (guide == null) return;
+        World.Children.Remove(guide);
+        guide = null;
     }
 
     void Node_Up(NodeVisual nv, MouseButtonEventArgs e)
     {
         if (!_draggingNodes) return;
         _draggingNodes = false;
+        HideGuide(ref _guideV);
+        HideGuide(ref _guideH);
         if (nv.Root.IsMouseCaptured) nv.Root.ReleaseMouseCapture();
         bool ctrl = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
         if (!_movedDuringDrag && !ctrl && _selected.Count > 1) SelectOnly(nv);

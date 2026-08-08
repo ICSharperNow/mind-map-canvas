@@ -60,7 +60,9 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
 - **Pan** by simply dragging empty canvas - or middle-drag / Space+drag
 - **Zoom** 10%-400% with the wheel, anchored at the cursor; Fit and 100% shortcuts
 - Window resizing keeps the view centered on the same spot
-- **Snap to grid** toggle for tidy layouts
+- **Snap to grid** toggle for tidy layouts, plus **smart alignment guides**: while
+  dragging, shapes snap to the edges and centers of nearby shapes on both axes with
+  dashed guide lines showing the alignment
 - **Cell painting** (`P` or the Paint button): drag to highlight a whole area of grid
   cells with the current color - great for zoning the board; Shift+drag for a freehand
   brush, right-drag to erase (a plain right-click still opens menus), Ctrl+Z (or the
@@ -73,7 +75,7 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
 - **Double-click** the canvas to place a shape, or **Alt+drag** to draw one at exactly
   the size you want
 - Move by dragging, resize via the corner grip, nudge with arrow keys, and **rotate**
-  with the handle above a selected shape (Shift snaps to 15° steps) - connections and
+  with the ⟳ handle above a selected shape (Shift snaps to 15° steps) - connections and
   exports follow the rotation
 - **16-color palette plus a full HSV custom color picker** (hue strip,
   saturation/value area, hex input); custom colors are remembered and appear
