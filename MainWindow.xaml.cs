@@ -272,6 +272,22 @@ public partial class MainWindow : Window
             };
             fb.SetResourceReference(StyleProperty, "ToolBtn");
             fb.Click += (s, a) => ApplyTextFormat(mm => mm.Font = fam);
+            fb.MouseEnter += (s, a) =>
+            {
+                var ff = new FontFamily(fam);
+                foreach (var id in _selected)
+                    if (_nodes.TryGetValue(id, out var nv))
+                    {
+                        nv.Label.FontFamily = ff;
+                        nv.Editor.FontFamily = ff;
+                    }
+            };
+            fb.MouseLeave += (s, a) =>
+            {
+                foreach (var id in _selected)
+                    if (_nodes.TryGetValue(id, out var nv))
+                        ApplyTextStyle(nv);
+            };
             FontWrap.Children.Add(fb);
         }
 
@@ -352,7 +368,20 @@ public partial class MainWindow : Window
         foreach (var def in ShapeDefs)
         {
             var kind = def.Kind;
-            var sub = new MenuItem { Header = def.Name };
+            var prev = MakeShapeElement(kind);
+            prev.Effect = null;
+            prev.Width = 26;
+            prev.Height = 17;
+            prev.Fill = new SolidColorBrush(Color.FromRgb(0xB9, 0xC4, 0xD8));
+            prev.Stroke = new SolidColorBrush(Color.FromRgb(0x7A, 0x86, 0x99));
+            prev.StrokeThickness = 1;
+            if (prev is Rectangle prr) { prr.RadiusX = 3; prr.RadiusY = 3; }
+            var hdr = new StackPanel { Orientation = Orientation.Horizontal };
+            hdr.Children.Add(prev);
+            var nm = new TextBlock { Text = def.Name, Margin = new Thickness(9, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            nm.SetResourceReference(TextBlock.ForegroundProperty, "Brush.Text");
+            hdr.Children.Add(nm);
+            var sub = new MenuItem { Header = hdr };
             sub.Click += (s, a) => CreateNoteAt(_canvasMenuPos, kind);
             miAddHere.Items.Add(sub);
         }
@@ -844,7 +873,17 @@ public partial class MainWindow : Window
         var handleLayer = new Canvas { IsHitTestVisible = true };
         root.Children.Add(handleLayer);
         handleLayer.Children.Add(rotHandle);
-        handleLayer.Children.Add(grip);
+        if (m.Kind == "Zone")
+        {
+            // Zones render behind everything, so their resize badge lives on the
+            // world canvas above all objects instead of inside the zone visual.
+            Panel.SetZIndex(grip, 100001);
+            World.Children.Add(grip);
+        }
+        else
+        {
+            handleLayer.Children.Add(grip);
+        }
 
         Canvas.SetLeft(root, m.X);
         Canvas.SetTop(root, m.Y);
@@ -1604,6 +1643,7 @@ public partial class MainWindow : Window
             n.Model.Y = kv.Value.Y + fdy;
             Canvas.SetLeft(n.Root, n.Model.X);
             Canvas.SetTop(n.Root, n.Model.Y);
+            if (n.Model.Kind == "Zone") UpdateHandlePositions(n);
             UpdateConnectionsFor(kv.Key);
         }
         MarkDirty();
@@ -1734,6 +1774,7 @@ public partial class MainWindow : Window
             n.Model.Y += dy;
             Canvas.SetLeft(n.Root, n.Model.X);
             Canvas.SetTop(n.Root, n.Model.Y);
+            if (n.Model.Kind == "Zone") UpdateHandlePositions(n);
             UpdateConnectionsFor(id);
         }
         MarkDirty();
@@ -1853,6 +1894,7 @@ public partial class MainWindow : Window
         foreach (var cv in _conns.Where(c => c.Model.From == id || c.Model.To == id).ToList())
             RemoveConnectionVisual(cv);
         World.Children.Remove(nv.Root);
+        if (nv.Model.Kind == "Zone") World.Children.Remove(nv.Grip);
         _nodes.Remove(id);
         if (_editing == nv) _editing = null;
         if (_linkSource == nv || _linkHover == nv) CancelLink();
@@ -1899,8 +1941,18 @@ public partial class MainWindow : Window
         double k = HandleScaleFactor();
         Canvas.SetLeft(nv.RotHandle, m.W / 2 - 10.5);
         Canvas.SetTop(nv.RotHandle, -(12 + 24 * k));
-        Canvas.SetLeft(nv.Grip, m.W + 8 + 10 * k - 11);
-        Canvas.SetTop(nv.Grip, m.H + 8 + 10 * k - 11);
+        double gripOffset = 8 + 10 * k - 11;
+        if (m.Kind == "Zone")
+        {
+            // World coordinates: the zone grip is a direct World child.
+            Canvas.SetLeft(nv.Grip, m.X + m.W + gripOffset);
+            Canvas.SetTop(nv.Grip, m.Y + m.H + gripOffset);
+        }
+        else
+        {
+            Canvas.SetLeft(nv.Grip, m.W + gripOffset);
+            Canvas.SetTop(nv.Grip, m.H + gripOffset);
+        }
     }
 
     void ShowHandles(NodeVisual nv, bool show)
@@ -2106,6 +2158,28 @@ public partial class MainWindow : Window
     Brush ConnStrokeOf(ConnectionVisual cv) =>
         cv.Model.Color == null ? ConnBrush : BrushFrom(cv.Model.Color);
 
+    void ApplyConnColor(ConnectionVisual cv, string hex, bool all)
+    {
+        if (!all)
+        {
+            SetConnColor(cv, hex);
+            return;
+        }
+        foreach (var other in _conns)
+        {
+            other.Model.Color = hex;
+            if (other != _selectedConn)
+            {
+                other.Body.Stroke = ConnStrokeOf(other);
+                other.Arrow.Fill = ConnStrokeOf(other);
+            }
+        }
+        _lastConnColor = hex;
+        _settings.LastConnColor = hex;
+        SettingsStore.Save(_settings);
+        MarkDirty();
+    }
+
     void SetConnColor(ConnectionVisual cv, string hex)
     {
         cv.Model.Color = hex;
@@ -2124,7 +2198,8 @@ public partial class MainWindow : Window
     {
         if (from == to) return null;
         if (!_nodes.ContainsKey(from) || !_nodes.ContainsKey(to)) return null;
-        if (_conns.Any(c => c.Model.From == from && c.Model.To == to)) return null;
+        if (_conns.Any(c => c.Model.From == from && c.Model.To == to &&
+                            c.Model.FromAnchor == fromAnchor && c.Model.ToAnchor == toAnchor)) return null;
 
         var cv = new ConnectionVisual
         {
@@ -2176,9 +2251,14 @@ public partial class MainWindow : Window
             var nameText = new TextBlock { Text = name, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
             nameText.SetResourceReference(TextBlock.ForegroundProperty, "Brush.Text");
             header.Children.Add(nameText);
-            var item = new MenuItem { Header = header };
-            item.Click += (s, e) => SetConnColor(cv, chosen);
-            colorMenu.Items.Add(item);
+            var colorItem = new MenuItem { Header = header };
+            var applyOne = new MenuItem { Header = "Apply to this connector" };
+            applyOne.Click += (s, e) => ApplyConnColor(cv, chosen, all: false);
+            var applyAll = new MenuItem { Header = "Apply to all connectors" };
+            applyAll.Click += (s, e) => ApplyConnColor(cv, chosen, all: true);
+            colorItem.Items.Add(applyOne);
+            colorItem.Items.Add(applyAll);
+            colorMenu.Items.Add(colorItem);
         }
         var miCustomConn = new MenuItem { Header = "Custom…" };
         miCustomConn.Click += (s, e) =>
@@ -2187,30 +2267,16 @@ public partial class MainWindow : Window
             try { initial = (Color)ColorConverter.ConvertFromString(cv.Model.Color ?? "#8895A7"); }
             catch { initial = Colors.Gray; }
             var dlg = new ColorPickerWindow(initial) { Owner = this };
-            if (dlg.ShowDialog() == true)
-                SetConnColor(cv, $"#{dlg.SelectedColor.R:X2}{dlg.SelectedColor.G:X2}{dlg.SelectedColor.B:X2}");
+            if (dlg.ShowDialog() != true) return;
+            var hex = $"#{dlg.SelectedColor.R:X2}{dlg.SelectedColor.G:X2}{dlg.SelectedColor.B:X2}";
+            var scope = ModernDialog.Show(this, "Apply custom color",
+                "Apply this color to just this connector, or to every connector on the board?",
+                "This connector", "All connectors", "Cancel");
+            if (scope == ModernDialog.Outcome.Primary) ApplyConnColor(cv, hex, all: false);
+            else if (scope == ModernDialog.Outcome.Secondary) ApplyConnColor(cv, hex, all: true);
         };
         colorMenu.Items.Add(miCustomConn);
         connMenu.Items.Add(colorMenu);
-
-        var miAllColor = new MenuItem { Header = "Apply this color to all connectors" };
-        miAllColor.Click += (s, e) =>
-        {
-            foreach (var other in _conns)
-            {
-                other.Model.Color = cv.Model.Color;
-                if (other != _selectedConn)
-                {
-                    other.Body.Stroke = ConnStrokeOf(other);
-                    other.Arrow.Fill = ConnStrokeOf(other);
-                }
-            }
-            _lastConnColor = cv.Model.Color;
-            _settings.LastConnColor = _lastConnColor;
-            SettingsStore.Save(_settings);
-            MarkDirty();
-        };
-        connMenu.Items.Add(miAllColor);
 
         var miReverse = new MenuItem { Header = "Reverse direction" };
         miReverse.Click += (s, e) =>

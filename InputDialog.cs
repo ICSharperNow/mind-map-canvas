@@ -29,7 +29,7 @@ public class InputDialog : Window
         var promptText = new TextBlock { Text = prompt, FontSize = 13, Margin = new Thickness(0, 10, 0, 6) };
         promptText.SetResourceReference(TextBlock.ForegroundProperty, "Brush.SubtleText");
 
-        _box = new TextBox { Text = initial ?? "", MinWidth = 340, FontSize = 13 };
+        _box = new TextBox { Text = initial ?? "", MinWidth = 340, FontSize = 13, Padding = new Thickness(8, 5, 8, 5) };
         _box.SetResourceReference(StyleProperty, "ThemedText");
         _box.KeyDown += (s, e) =>
         {
@@ -40,7 +40,7 @@ public class InputDialog : Window
         {
             Text = placeholder ?? "",
             FontSize = 13,
-            Margin = new Thickness(10, 0, 0, 0),
+            Margin = new Thickness(9, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
             IsHitTestVisible = false,
             Opacity = 0.5,
@@ -97,7 +97,12 @@ public class InputDialog : Window
         {
             if (e.Key == Key.Escape) Close();
         };
-        Loaded += (s, e) => { _box.Focus(); _box.CaretIndex = _box.Text.Length; };
+        Loaded += (s, e) =>
+        {
+            _box.Focus();
+            _box.CaretIndex = _box.Text.Length;
+            _box.ScrollToHome();
+        };
     }
 
     public static string Show(Window owner, string title, string prompt, string initial = "", string placeholder = null)
