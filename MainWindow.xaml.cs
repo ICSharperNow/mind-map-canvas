@@ -446,7 +446,10 @@ public partial class MainWindow : Window
     void Open_Click(object sender, RoutedEventArgs e)
     {
         if (!ConfirmDiscard()) return;
-        var dlg = new OpenFileDialog { Filter = "Mind map (*.json)|*.json|All files (*.*)|*.*" };
+        var dlg = new OpenFileDialog
+        {
+            Filter = "MindMap board (*.mindmap)|*.mindmap|JSON (*.json)|*.json|All files (*.*)|*.*"
+        };
         if (dlg.ShowDialog(this) != true) return;
         LoadFile(dlg.FileName);
     }
@@ -476,9 +479,9 @@ public partial class MainWindow : Window
         CommitEdit();
         var dlg = new SaveFileDialog
         {
-            Filter = "Mind map (*.json)|*.json|All files (*.*)|*.*",
-            DefaultExt = ".json",
-            FileName = string.IsNullOrEmpty(_currentFile) ? "mindmap.json" : IOPath.GetFileName(_currentFile)
+            Filter = "MindMap board (*.mindmap)|*.mindmap|JSON (*.json)|*.json|All files (*.*)|*.*",
+            DefaultExt = ".mindmap",
+            FileName = string.IsNullOrEmpty(_currentFile) ? "untitled.mindmap" : IOPath.GetFileName(_currentFile)
         };
         if (dlg.ShowDialog(this) != true) return false;
         if (!WriteFile(dlg.FileName)) return false;

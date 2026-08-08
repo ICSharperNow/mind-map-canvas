@@ -1,7 +1,7 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
     <Package Name="MindMap Canvas"
              Manufacturer="ICSharperNow"
-             Version="1.7.0"
+             Version="1.7.1"
              UpgradeCode="80298A68-2B8E-4179-B2BD-FC0B5BEA32B8"
              Language="1033"
              Compressed="yes">
@@ -25,6 +25,21 @@
             <Files Include="$(var.PublishDir)\**"/>
         </ComponentGroup>
 
+        <!-- .mindmap file type: document icon + double-click opens the app. -->
+        <Component Id="DocIcon" Directory="INSTALLFOLDER">
+            <File Id="DocIcoFile" Source="$(var.AssetsDir)/file.ico" KeyPath="yes"/>
+        </Component>
+        <Component Id="FileAssociation" Directory="INSTALLFOLDER">
+            <RegistryValue Root="HKLM" Key="Software\Classes\.mindmap"
+                           Value="MindMapCanvas.Board" Type="string" KeyPath="yes"/>
+            <RegistryValue Root="HKLM" Key="Software\Classes\MindMapCanvas.Board"
+                           Value="MindMap Canvas board" Type="string"/>
+            <RegistryValue Root="HKLM" Key="Software\Classes\MindMapCanvas.Board\DefaultIcon"
+                           Value="[INSTALLFOLDER]file.ico" Type="string"/>
+            <RegistryValue Root="HKLM" Key="Software\Classes\MindMapCanvas.Board\shell\open\command"
+                           Value="&quot;[INSTALLFOLDER]MindMapCanvas.exe&quot; &quot;%1&quot;" Type="string"/>
+        </Component>
+
         <!-- Non-advertised shortcuts: launch the exe directly (no Windows Installer
              resolution step) and give the Start menu its normal right-click actions. -->
         <Component Id="AppShortcuts" Directory="ProgramMenuFolder">
@@ -47,6 +62,8 @@
         <Feature Id="Main" Title="MindMap Canvas" Level="1">
             <ComponentGroupRef Id="AppFiles"/>
             <ComponentRef Id="AppShortcuts"/>
+            <ComponentRef Id="DocIcon"/>
+            <ComponentRef Id="FileAssociation"/>
         </Feature>
     </Package>
 </Wix>

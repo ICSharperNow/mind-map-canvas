@@ -154,7 +154,10 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
 
 ## File format
 
-Boards are plain JSON - friendly to diffs and scripts:
+Boards are saved as **`.mindmap`** files - plain JSON inside, friendly to diffs and
+scripts. The installer registers the extension with its own document icon, so
+double-clicking a board opens it in MindMap Canvas. Plain `.json` boards from older
+versions still open via File > Open:
 
 ```json
 {
