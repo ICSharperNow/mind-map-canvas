@@ -58,7 +58,8 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
 ### Canvas
 - **Infinite board** with a layered grid (subtle minor lines, stronger major lines)
 - **Pan** by simply dragging empty canvas - or middle-drag / Space+drag
-- **Zoom** 10%-400% with the wheel, anchored at the cursor; Fit and 100% shortcuts
+- **Zoom** 10%-400% with the wheel (anchored at the cursor) or the bottom-right zoom
+  dock: slider, +/-, Fit, and 1:1
 - Window resizing keeps the view centered on the same spot
 - **Snap to grid** toggle for tidy layouts, plus **smart alignment guides**: while
   dragging, shapes snap to the edges and centers of nearby shapes on both axes with
@@ -68,8 +69,8 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
   board; the opacity slider adjusts selected zones live and sets the default for new ones
 
 ### Shapes
-- Nine shapes: **rectangle, pill, ellipse, diamond, hexagon, parallelogram, trapezoid,
-  triangle, octagon**, chosen from a visual gallery with live previews; text stays
+- Ten shapes: **rectangle, pill, ellipse, perfect circle, diamond, hexagon,
+  parallelogram, trapezoid, triangle, octagon**, chosen from a visual gallery with live previews; text stays
   neatly inside each shape's outline
 - **Double-click** the canvas to place a shape, or **Alt+drag** to draw one at exactly
   the size you want
@@ -104,6 +105,12 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
   opens the link in your browser, right-click offers Open and Refresh preview
   (falls back to a simple link card if the page can't load)
 
+### Clipart & templates
+- **Clipart gallery** (😀 Clipart): sixty symbols across six categories, dropped onto the
+  board as transparent, resizable, connectable objects
+- **Start from a template** (File > New > From template): mind map, flowchart, SWOT,
+  kanban, org chart, or timeline starter boards
+
 ### Text
 - Double-click a shape to type; Enter commits, Shift+Enter adds a newline
 - Per-shape **font family, size, bold, italic, alignment, and text color** via the
@@ -122,6 +129,7 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
   palette is derived automatically - applied live and remembered between runs
 - **Settings panel**: theme, grid visibility, default snap-to-grid, and whether the app
   remembers your last-used shape and color
+- **Grouped toolbar** (Insert / Format / Board / Edit) with captions, Office-style
 - **Right-click menus everywhere**: shapes (edit/duplicate/copy/cut/delete), connections
   (reverse/delete), and empty canvas (paste/add shape/select all/zoom to fit)
 

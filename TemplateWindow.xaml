@@ -1,0 +1,28 @@
+<Window x:Class="MindMapCanvas.TemplateWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="New from template"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        SizeToContent="WidthAndHeight" WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False" ResizeMode="NoResize"
+        FontFamily="Segoe UI Variable Text, Segoe UI"
+        MouseLeftButtonDown="Window_Drag" KeyDown="Window_KeyDown">
+    <Border CornerRadius="14" BorderThickness="1" Margin="20"
+            Background="{DynamicResource Brush.PanelBg}"
+            BorderBrush="{DynamicResource Brush.PanelBorder}">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="26" ShadowDepth="4" Opacity="0.32"/>
+        </Border.Effect>
+        <StackPanel Margin="22,18,22,18" Width="380">
+            <Grid>
+                <TextBlock Text="Start from a template" FontSize="16" FontWeight="SemiBold"
+                           Foreground="{DynamicResource Brush.Text}"/>
+                <Button Content="✕" HorizontalAlignment="Right" VerticalAlignment="Top"
+                        Style="{StaticResource ToolBtn}" Padding="7,3" Click="Close_Click"/>
+            </Grid>
+            <TextBlock Text="Pick a starting layout - it fills the board, ready to edit."
+                       FontSize="12" Foreground="{DynamicResource Brush.SubtleText}" Margin="0,4,0,10"/>
+            <StackPanel x:Name="List"/>
+        </StackPanel>
+    </Border>
+</Window>

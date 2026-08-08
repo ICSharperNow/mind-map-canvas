@@ -18,7 +18,10 @@
                 BorderBrush="{DynamicResource Brush.PanelBorder}" BorderThickness="0,0,0,1">
             <Menu Background="Transparent" Padding="4,1">
                 <MenuItem Header="_File" Style="{StaticResource MenuBarItem}">
-                    <MenuItem Header="_New" Click="New_Click" InputGestureText="Ctrl+N"/>
+                    <MenuItem Header="_New">
+                        <MenuItem Header="_Blank board" Click="New_Click" InputGestureText="Ctrl+N"/>
+                        <MenuItem Header="From _template…" Click="NewFromTemplate_Click"/>
+                    </MenuItem>
                     <MenuItem Header="_Open…" Click="Open_Click" InputGestureText="Ctrl+O"/>
                     <MenuItem Header="_Save" Click="Save_Click" InputGestureText="Ctrl+S"/>
                     <MenuItem Header="Save _As…" Click="SaveAs_Click" InputGestureText="Ctrl+Shift+S"/>
@@ -54,168 +57,87 @@
 
         <!-- Toolbar -->
         <Border DockPanel.Dock="Top" Background="{DynamicResource Brush.PanelBg}"
-                BorderBrush="{DynamicResource Brush.PanelBorder}" BorderThickness="0,0,0,1" Padding="8,4">
+                BorderBrush="{DynamicResource Brush.PanelBorder}" BorderThickness="0,0,0,1" Padding="8,3">
             <WrapPanel VerticalAlignment="Center">
-                <Button Style="{StaticResource ToolBtn}" Click="AddNote_Click" Content="＋ Note" ToolTip="Add a sticky note (or double-click the canvas)"/>
-                <Button Style="{StaticResource ToolBtn}" Click="AddText_Click" ToolTip="Add a text box: single line by default, grows to multi-line; background optional">
-                    <TextBlock VerticalAlignment="Center"><Run Text="T" FontWeight="Bold"/><Run Text=" Text"/></TextBlock>
-                </Button>
-                <Button Style="{StaticResource ToolBtn}" Click="ImportImage_Click" Content="🖼 Image" ToolTip="Import an image onto the board"/>
-                <Button Style="{StaticResource ToolBtn}" Click="ImportLink_Click" Content="🔗 Link" ToolTip="Add a web link with a live page preview"/>
-                <Button Style="{StaticResource ToolBtn}" Click="Delete_Click" Content="🗑 Delete" ToolTip="Delete selection (Del)"/>
-                <Border Width="1" Height="26" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
 
-                <Button x:Name="ColorBtn" Style="{StaticResource ToolBtn}" Click="ColorBtn_Click" ToolTip="Note color">
+                <StackPanel Margin="2,0">
                     <StackPanel Orientation="Horizontal">
-                        <Border x:Name="CurrentColorSwatch" Width="16" Height="16" CornerRadius="8"
-                                Background="#FFF9B1" BorderBrush="#40000000" BorderThickness="1"
-                                VerticalAlignment="Center"/>
-                        <TextBlock Text="Color ▾" Margin="6,0,0,0" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Button>
-                <Popup x:Name="ColorPopup" PlacementTarget="{Binding ElementName=ColorBtn}" Placement="Bottom"
-                       StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
-                    <Border Background="{DynamicResource Brush.PanelBg}"
-                            BorderBrush="{DynamicResource Brush.PanelBorder}"
-                            BorderThickness="1" CornerRadius="10" Padding="10" Margin="10">
-                        <Border.Effect>
-                            <DropShadowEffect BlurRadius="18" ShadowDepth="3" Opacity="0.30"/>
-                        </Border.Effect>
-                        <StackPanel>
-                            <WrapPanel x:Name="PaletteWrap" Width="208"/>
-                            <TextBlock x:Name="RecentLabel" Text="YOUR CUSTOM COLORS" FontSize="10" FontWeight="SemiBold"
-                                       Opacity="0.8" Foreground="{DynamicResource Brush.SubtleText}"
-                                       Margin="2,8,0,2" Visibility="Collapsed"/>
-                            <WrapPanel x:Name="RecentWrap" Width="208"/>
-                            <Button Content="Custom color…" Style="{StaticResource ToolBtn}" Margin="0,8,0,0"
-                                    HorizontalContentAlignment="Center" Click="CustomColor_Click"/>
-                        </StackPanel>
-                    </Border>
-                </Popup>
-                <ToggleButton x:Name="PaintToggle" Style="{StaticResource ToolToggle}"
-                              Checked="PaintToggle_Changed" Unchecked="PaintToggle_Changed"
-                              ToolTip="Zone tool (P): drag an area to add a movable background zone that snaps to the grid">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="▧" VerticalAlignment="Center"/>
-                        <TextBlock Text=" Zone" Margin="3,0,0,0" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </ToggleButton>
-                <Slider x:Name="PaintOpacity" Width="70" Minimum="0.1" Maximum="1" Value="0.5"
-                        VerticalAlignment="Center" Margin="4,0,0,0"
-                        ValueChanged="PaintOpacity_Changed"
-                        ToolTip="Opacity: adjusts every selected object live; also the default for new zones"/>
-                <Border Width="1" Height="26" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
-
-                <Button x:Name="ShapeBtn" Style="{StaticResource ToolBtn}" Click="ShapeBtn_Click"
-                        ToolTip="Shape for new notes (also applies to selection)">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock x:Name="ShapeIcon" Text="▭" VerticalAlignment="Center"/>
-                        <TextBlock Text=" Shape ▾" Margin="4,0,0,0" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Button>
-                <Popup x:Name="ShapePopup" PlacementTarget="{Binding ElementName=ShapeBtn}" Placement="Bottom"
-                       StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
-                    <Border Background="{DynamicResource Brush.PanelBg}"
-                            BorderBrush="{DynamicResource Brush.PanelBorder}"
-                            BorderThickness="1" CornerRadius="10" Padding="6" Margin="10">
-                        <Border.Effect>
-                            <DropShadowEffect BlurRadius="18" ShadowDepth="3" Opacity="0.30"/>
-                        </Border.Effect>
-                        <WrapPanel x:Name="ShapeWrap" Width="240"/>
-                    </Border>
-                </Popup>
-
-                <Button x:Name="TextBtn" Style="{StaticResource ToolBtn}" Click="TextBtn_Click"
-                        ToolTip="Change text size, style, alignment, and color of the selected shapes">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="Aa" FontWeight="Bold" VerticalAlignment="Center"/>
-                        <TextBlock Text=" Format text ▾" Margin="4,0,0,0" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Button>
-                <Popup x:Name="TextPopup" PlacementTarget="{Binding ElementName=TextBtn}" Placement="Bottom"
-                       StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
-                    <Border Background="{DynamicResource Brush.PanelBg}"
-                            BorderBrush="{DynamicResource Brush.PanelBorder}"
-                            BorderThickness="1" CornerRadius="10" Padding="12" Margin="10">
-                        <Border.Effect>
-                            <DropShadowEffect BlurRadius="18" ShadowDepth="3" Opacity="0.30"/>
-                        </Border.Effect>
-                        <StackPanel MinWidth="230">
-                            <TextBlock Text="Format text" FontSize="13" FontWeight="SemiBold"
-                                       Foreground="{DynamicResource Brush.Text}"/>
-                            <TextBlock Text="Applies to every selected shape."
-                                       FontSize="11" Foreground="{DynamicResource Brush.SubtleText}" Margin="0,2,0,10"/>
-                            <TextBlock Text="TEXT SIZE" FontSize="10" FontWeight="SemiBold" Opacity="0.8"
-                                       Foreground="{DynamicResource Brush.SubtleText}"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,4,0,10">
-                                <Button Style="{StaticResource ToolBtn}" Width="38" Padding="0,5" Content="A−" Click="FontMinus_Click" ToolTip="Smaller text"/>
-                                <TextBlock x:Name="FontSizeLabel" Text="14" Width="34" TextAlignment="Center" VerticalAlignment="Center"
-                                           FontSize="13" Foreground="{DynamicResource Brush.Text}"/>
-                                <Button Style="{StaticResource ToolBtn}" Width="38" Padding="0,5" Content="A+" Click="FontPlus_Click" ToolTip="Larger text"/>
+                        <Button Style="{StaticResource ToolBtn}" Click="AddNote_Click" Content="＋ Note" ToolTip="Add a sticky note (or double-click the canvas)"/>
+                        <Button Style="{StaticResource ToolBtn}" Click="AddText_Click" ToolTip="Add a text box: single line by default, grows to multi-line; background optional">
+                            <TextBlock VerticalAlignment="Center"><Run Text="T" FontWeight="Bold"/><Run Text=" Text"/></TextBlock>
+                        </Button>
+                        <Button Style="{StaticResource ToolBtn}" Click="ImportImage_Click" Content="🖼 Image" ToolTip="Import an image onto the board"/>
+                        <Button Style="{StaticResource ToolBtn}" Click="ImportLink_Click" Content="🔗 Link" ToolTip="Add a web link with a live page preview"/>
+                        <ToggleButton x:Name="PaintToggle" Style="{StaticResource ToolToggle}"
+                                      Checked="PaintToggle_Changed" Unchecked="PaintToggle_Changed"
+                                      ToolTip="Zone tool (P): drag an area to add a movable background zone that snaps to the grid">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="▧" VerticalAlignment="Center"/>
+                                <TextBlock Text=" Zone" Margin="3,0,0,0" VerticalAlignment="Center"/>
                             </StackPanel>
-                            <TextBlock Text="STYLE" FontSize="10" FontWeight="SemiBold" Opacity="0.8"
-                                       Foreground="{DynamicResource Brush.SubtleText}"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,4,0,10">
-                                <Button Style="{StaticResource ToolBtn}" Width="60" Padding="0,5" FontWeight="Bold" Content="Bold" Click="Bold_Click" MouseEnter="Bold_Preview" MouseLeave="Format_PreviewEnd" ToolTip="Toggle bold"/>
-                                <Button Style="{StaticResource ToolBtn}" Width="60" Padding="0,5" FontStyle="Italic" Content="Italic" Click="Italic_Click" MouseEnter="Italic_Preview" MouseLeave="Format_PreviewEnd" ToolTip="Toggle italic"/>
+                        </ToggleButton>
+                        <Button x:Name="ClipartBtn" Style="{StaticResource ToolBtn}" Click="ClipartBtn_Click"
+                                Content="😀 Clipart ▾" ToolTip="Insert clipart symbols onto the board"/>
+                    </StackPanel>
+                    <TextBlock Text="INSERT" FontSize="9" FontWeight="SemiBold" Opacity="0.65"
+                               Foreground="{DynamicResource Brush.SubtleText}" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                </StackPanel>
+                <Border Width="1" Height="44" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
+
+                <StackPanel Margin="2,0">
+                    <StackPanel Orientation="Horizontal">
+                        <Button x:Name="ColorBtn" Style="{StaticResource ToolBtn}" Click="ColorBtn_Click" ToolTip="Fill color for new and selected objects">
+                            <StackPanel Orientation="Horizontal">
+                                <Border x:Name="CurrentColorSwatch" Width="16" Height="16" CornerRadius="8"
+                                        Background="#FFF9B1" BorderBrush="#40000000" BorderThickness="1"
+                                        VerticalAlignment="Center"/>
+                                <TextBlock Text=" Color ▾" Margin="4,0,0,0" VerticalAlignment="Center"/>
                             </StackPanel>
-                            <TextBlock Text="ALIGNMENT" FontSize="10" FontWeight="SemiBold" Opacity="0.8"
-                                       Foreground="{DynamicResource Brush.SubtleText}"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,4,0,10">
-                                <Button Style="{StaticResource ToolBtn}" Width="36" Padding="0,6" Click="AlignLeft_Click" MouseEnter="AlignLeft_Preview" MouseLeave="Format_PreviewEnd" ToolTip="Align left">
-                                    <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE8E4;" FontSize="14"/>
-                                </Button>
-                                <Button Style="{StaticResource ToolBtn}" Width="36" Padding="0,6" Click="AlignCenter_Click" MouseEnter="AlignCenter_Preview" MouseLeave="Format_PreviewEnd" ToolTip="Align center">
-                                    <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE8E3;" FontSize="14"/>
-                                </Button>
-                                <Button Style="{StaticResource ToolBtn}" Width="36" Padding="0,6" Click="AlignRight_Click" MouseEnter="AlignRight_Preview" MouseLeave="Format_PreviewEnd" ToolTip="Align right">
-                                    <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE8E2;" FontSize="14"/>
-                                </Button>
+                        </Button>
+                        <Button x:Name="ShapeBtn" Style="{StaticResource ToolBtn}" Click="ShapeBtn_Click"
+                                ToolTip="Shape for new notes (also applies to selection)">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock x:Name="ShapeIcon" Text="▭" VerticalAlignment="Center"/>
+                                <TextBlock Text=" Shape ▾" Margin="4,0,0,0" VerticalAlignment="Center"/>
                             </StackPanel>
-                            <TextBlock Text="FONT" FontSize="10" FontWeight="SemiBold" Opacity="0.8"
-                                       Foreground="{DynamicResource Brush.SubtleText}"/>
-                            <WrapPanel x:Name="FontWrap" Width="224" Margin="0,4,0,10"/>
-                            <TextBlock Text="TEXT COLOR" FontSize="10" FontWeight="SemiBold" Opacity="0.8"
-                                       Foreground="{DynamicResource Brush.SubtleText}"/>
-                            <WrapPanel x:Name="TextColorWrap" Width="224" Margin="0,4,0,0"/>
-                            <Button Content="Custom text color…" Style="{StaticResource ToolBtn}" Margin="0,6,0,0"
-                                    HorizontalContentAlignment="Center" Click="CustomTextColor_Click"/>
-                        </StackPanel>
-                    </Border>
-                </Popup>
-                <Border Width="1" Height="26" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
+                        </Button>
+                        <Button x:Name="TextBtn" Style="{StaticResource ToolBtn}" Click="TextBtn_Click"
+                                ToolTip="Change text size, style, alignment, and color of the selected shapes">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Aa" FontWeight="Bold" VerticalAlignment="Center"/>
+                                <TextBlock Text=" Format text ▾" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Slider x:Name="PaintOpacity" Width="70" Minimum="0.1" Maximum="1" Value="0.5"
+                                VerticalAlignment="Center" Margin="4,0,0,0"
+                                ValueChanged="PaintOpacity_Changed"
+                                ToolTip="Opacity: adjusts every selected object live; also the default for new zones"/>
+                    </StackPanel>
+                    <TextBlock Text="FORMAT" FontSize="9" FontWeight="SemiBold" Opacity="0.65"
+                               Foreground="{DynamicResource Brush.SubtleText}" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                </StackPanel>
+                <Border Width="1" Height="44" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
 
-                <CheckBox x:Name="SnapCheck" Content="Snap to grid" IsChecked="True" VerticalAlignment="Center"
-                          Margin="4,0" FontSize="13" Foreground="{DynamicResource Brush.Text}"/>
-                <Border Width="1" Height="26" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
+                <StackPanel Margin="2,0">
+                    <StackPanel Orientation="Horizontal" Height="31">
+                        <CheckBox x:Name="SnapCheck" Content="Snap to grid" IsChecked="True" VerticalAlignment="Center"
+                                  Margin="4,0" FontSize="13" Foreground="{DynamicResource Brush.Text}"/>
+                        <Button x:Name="ExportBtn" Style="{StaticResource ToolBtn}" Click="ExportBtn_Click"
+                                Content="Export as ▾" ToolTip="Export the board as an image or PDF"/>
+                    </StackPanel>
+                    <TextBlock Text="BOARD" FontSize="9" FontWeight="SemiBold" Opacity="0.65"
+                               Foreground="{DynamicResource Brush.SubtleText}" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                </StackPanel>
+                <Border Width="1" Height="44" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
 
-                <Button Style="{StaticResource ToolBtn}" Click="ZoomOut_Click" Content="−" Width="32" Padding="0,6" ToolTip="Zoom out (Ctrl+-)"/>
-                <TextBlock x:Name="ZoomLabel" Text="100%" Width="46" TextAlignment="Center" VerticalAlignment="Center"
-                           FontSize="13" Foreground="{DynamicResource Brush.Text}"/>
-                <Button Style="{StaticResource ToolBtn}" Click="ZoomIn_Click" Content="＋" Width="32" Padding="0,6" Margin="2,0,6,0" ToolTip="Zoom in (Ctrl++)"/>
-                <Button Style="{StaticResource ToolBtn}" Click="Fit_Click" Content="Fit" ToolTip="Zoom to fit all notes"/>
-                <Button Style="{StaticResource ToolBtn}" Click="Zoom100_Click" Content="100%" ToolTip="Reset zoom (Ctrl+0)"/>
-                <Border Width="1" Height="26" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
+                <StackPanel Margin="2,0">
+                    <StackPanel Orientation="Horizontal">
+                        <Button Style="{StaticResource ToolBtn}" Click="Delete_Click" Content="🗑 Delete" ToolTip="Delete selection (Del)"/>
+                    </StackPanel>
+                    <TextBlock Text="EDIT" FontSize="9" FontWeight="SemiBold" Opacity="0.65"
+                               Foreground="{DynamicResource Brush.SubtleText}" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                </StackPanel>
 
-                <Button x:Name="ExportBtn" Style="{StaticResource ToolBtn}" Click="ExportBtn_Click"
-                        Content="Export as ▾" ToolTip="Export the board as an image or PDF"/>
-                <Popup x:Name="ExportPopup" PlacementTarget="{Binding ElementName=ExportBtn}" Placement="Bottom"
-                       StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
-                    <Border Background="{DynamicResource Brush.PanelBg}"
-                            BorderBrush="{DynamicResource Brush.PanelBorder}"
-                            BorderThickness="1" CornerRadius="10" Padding="6" Margin="10">
-                        <Border.Effect>
-                            <DropShadowEffect BlurRadius="18" ShadowDepth="3" Opacity="0.30"/>
-                        </Border.Effect>
-                        <StackPanel MinWidth="150">
-                            <Button Style="{StaticResource ToolBtn}" HorizontalContentAlignment="Left" Content="PNG image" Tag="png" Click="ExportFormat_Click"/>
-                            <Button Style="{StaticResource ToolBtn}" HorizontalContentAlignment="Left" Content="JPEG image" Tag="jpg" Click="ExportFormat_Click"/>
-                            <Button Style="{StaticResource ToolBtn}" HorizontalContentAlignment="Left" Content="PDF document" Tag="pdf" Click="ExportFormat_Click"/>
-                            <Button Style="{StaticResource ToolBtn}" HorizontalContentAlignment="Left" Content="BMP image" Tag="bmp" Click="ExportFormat_Click"/>
-                            <Button Style="{StaticResource ToolBtn}" HorizontalContentAlignment="Left" Content="TIFF image" Tag="tif" Click="ExportFormat_Click"/>
-                        </StackPanel>
-                    </Border>
-                </Popup>
             </WrapPanel>
         </Border>
 
@@ -245,6 +167,140 @@
                     </TransformGroup>
                 </Canvas.RenderTransform>
             </Canvas>
+
+            <!-- Zoom dock -->
+            <Border HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,18,14"
+                    Background="{DynamicResource Brush.PanelBg}"
+                    BorderBrush="{DynamicResource Brush.PanelBorder}"
+                    BorderThickness="1" CornerRadius="10" Padding="8,4" Panel.ZIndex="50">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.25"/>
+                </Border.Effect>
+                <StackPanel Orientation="Horizontal">
+                    <Button Style="{StaticResource ToolBtn}" Click="ZoomOut_Click" Content="−" Width="28" Padding="0,4" ToolTip="Zoom out (Ctrl+-)"/>
+                    <Slider x:Name="ZoomSlider" Width="110" Minimum="10" Maximum="400" Value="100"
+                            VerticalAlignment="Center" ValueChanged="ZoomSlider_Changed" ToolTip="Zoom"/>
+                    <Button Style="{StaticResource ToolBtn}" Click="ZoomIn_Click" Content="＋" Width="28" Padding="0,4" ToolTip="Zoom in (Ctrl++)"/>
+                    <TextBlock x:Name="ZoomLabel" Text="100%" Width="42" TextAlignment="Center" VerticalAlignment="Center"
+                               FontSize="12" Foreground="{DynamicResource Brush.Text}"/>
+                    <Button Style="{StaticResource ToolBtn}" Click="Fit_Click" Content="Fit" Padding="6,4" ToolTip="Zoom to fit all objects"/>
+                    <Button Style="{StaticResource ToolBtn}" Click="Zoom100_Click" Content="1:1" Padding="6,4" ToolTip="Reset zoom (Ctrl+0)"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Clipart gallery -->
+            <Popup x:Name="ClipartPopup" PlacementTarget="{Binding ElementName=ClipartBtn}" Placement="Bottom"
+                   StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+                <Border Background="{DynamicResource Brush.PanelBg}"
+                        BorderBrush="{DynamicResource Brush.PanelBorder}"
+                        BorderThickness="1" CornerRadius="10" Padding="10" Margin="10">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="18" ShadowDepth="3" Opacity="0.30"/>
+                    </Border.Effect>
+                    <ScrollViewer MaxHeight="340" VerticalScrollBarVisibility="Auto">
+                        <StackPanel x:Name="ClipartHost" Width="264"/>
+                    </ScrollViewer>
+                </Border>
+            </Popup>
+
+                    <Popup x:Name="ColorPopup" PlacementTarget="{Binding ElementName=ColorBtn}" Placement="Bottom"
+                           StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+                        <Border Background="{DynamicResource Brush.PanelBg}"
+                                BorderBrush="{DynamicResource Brush.PanelBorder}"
+                                BorderThickness="1" CornerRadius="10" Padding="10" Margin="10">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="18" ShadowDepth="3" Opacity="0.30"/>
+                            </Border.Effect>
+                            <StackPanel>
+                                <WrapPanel x:Name="PaletteWrap" Width="208"/>
+                                <TextBlock x:Name="RecentLabel" Text="YOUR CUSTOM COLORS" FontSize="10" FontWeight="SemiBold"
+                                           Opacity="0.8" Foreground="{DynamicResource Brush.SubtleText}"
+                                           Margin="2,8,0,2" Visibility="Collapsed"/>
+                                <WrapPanel x:Name="RecentWrap" Width="208"/>
+                                <Button Content="Custom color…" Style="{StaticResource ToolBtn}" Margin="0,8,0,0"
+                                        HorizontalContentAlignment="Center" Click="CustomColor_Click"/>
+                            </StackPanel>
+                        </Border>
+                    </Popup>
+                    <Popup x:Name="ShapePopup" PlacementTarget="{Binding ElementName=ShapeBtn}" Placement="Bottom"
+                           StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+                        <Border Background="{DynamicResource Brush.PanelBg}"
+                                BorderBrush="{DynamicResource Brush.PanelBorder}"
+                                BorderThickness="1" CornerRadius="10" Padding="6" Margin="10">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="18" ShadowDepth="3" Opacity="0.30"/>
+                            </Border.Effect>
+                            <WrapPanel x:Name="ShapeWrap" Width="240"/>
+                        </Border>
+                    </Popup>
+                    <Popup x:Name="TextPopup" PlacementTarget="{Binding ElementName=TextBtn}" Placement="Bottom"
+                           StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+                        <Border Background="{DynamicResource Brush.PanelBg}"
+                                BorderBrush="{DynamicResource Brush.PanelBorder}"
+                                BorderThickness="1" CornerRadius="10" Padding="12" Margin="10">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="18" ShadowDepth="3" Opacity="0.30"/>
+                            </Border.Effect>
+                            <StackPanel MinWidth="230">
+                                <TextBlock Text="Format text" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource Brush.Text}"/>
+                                <TextBlock Text="Applies to every selected shape."
+                                           FontSize="11" Foreground="{DynamicResource Brush.SubtleText}" Margin="0,2,0,10"/>
+                                <TextBlock Text="TEXT SIZE" FontSize="10" FontWeight="SemiBold" Opacity="0.8"
+                                           Foreground="{DynamicResource Brush.SubtleText}"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,4,0,10">
+                                    <Button Style="{StaticResource ToolBtn}" Width="38" Padding="0,5" Content="A−" Click="FontMinus_Click" ToolTip="Smaller text"/>
+                                    <TextBlock x:Name="FontSizeLabel" Text="14" Width="34" TextAlignment="Center" VerticalAlignment="Center"
+                                               FontSize="13" Foreground="{DynamicResource Brush.Text}"/>
+                                    <Button Style="{StaticResource ToolBtn}" Width="38" Padding="0,5" Content="A+" Click="FontPlus_Click" ToolTip="Larger text"/>
+                                </StackPanel>
+                                <TextBlock Text="STYLE" FontSize="10" FontWeight="SemiBold" Opacity="0.8"
+                                           Foreground="{DynamicResource Brush.SubtleText}"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,4,0,10">
+                                    <Button Style="{StaticResource ToolBtn}" Width="60" Padding="0,5" FontWeight="Bold" Content="Bold" Click="Bold_Click" MouseEnter="Bold_Preview" MouseLeave="Format_PreviewEnd" ToolTip="Toggle bold"/>
+                                    <Button Style="{StaticResource ToolBtn}" Width="60" Padding="0,5" FontStyle="Italic" Content="Italic" Click="Italic_Click" MouseEnter="Italic_Preview" MouseLeave="Format_PreviewEnd" ToolTip="Toggle italic"/>
+                                </StackPanel>
+                                <TextBlock Text="ALIGNMENT" FontSize="10" FontWeight="SemiBold" Opacity="0.8"
+                                           Foreground="{DynamicResource Brush.SubtleText}"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,4,0,10">
+                                    <Button Style="{StaticResource ToolBtn}" Width="36" Padding="0,6" Click="AlignLeft_Click" MouseEnter="AlignLeft_Preview" MouseLeave="Format_PreviewEnd" ToolTip="Align left">
+                                        <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE8E4;" FontSize="14"/>
+                                    </Button>
+                                    <Button Style="{StaticResource ToolBtn}" Width="36" Padding="0,6" Click="AlignCenter_Click" MouseEnter="AlignCenter_Preview" MouseLeave="Format_PreviewEnd" ToolTip="Align center">
+                                        <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE8E3;" FontSize="14"/>
+                                    </Button>
+                                    <Button Style="{StaticResource ToolBtn}" Width="36" Padding="0,6" Click="AlignRight_Click" MouseEnter="AlignRight_Preview" MouseLeave="Format_PreviewEnd" ToolTip="Align right">
+                                        <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE8E2;" FontSize="14"/>
+                                    </Button>
+                                </StackPanel>
+                                <TextBlock Text="FONT" FontSize="10" FontWeight="SemiBold" Opacity="0.8"
+                                           Foreground="{DynamicResource Brush.SubtleText}"/>
+                                <WrapPanel x:Name="FontWrap" Width="224" Margin="0,4,0,10"/>
+                                <TextBlock Text="TEXT COLOR" FontSize="10" FontWeight="SemiBold" Opacity="0.8"
+                                           Foreground="{DynamicResource Brush.SubtleText}"/>
+                                <WrapPanel x:Name="TextColorWrap" Width="224" Margin="0,4,0,0"/>
+                                <Button Content="Custom text color…" Style="{StaticResource ToolBtn}" Margin="0,6,0,0"
+                                        HorizontalContentAlignment="Center" Click="CustomTextColor_Click"/>
+                            </StackPanel>
+                        </Border>
+                    </Popup>
+                    <Popup x:Name="ExportPopup" PlacementTarget="{Binding ElementName=ExportBtn}" Placement="Bottom"
+                           StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+                        <Border Background="{DynamicResource Brush.PanelBg}"
+                                BorderBrush="{DynamicResource Brush.PanelBorder}"
+                                BorderThickness="1" CornerRadius="10" Padding="6" Margin="10">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="18" ShadowDepth="3" Opacity="0.30"/>
+                            </Border.Effect>
+                            <StackPanel MinWidth="150">
+                                <Button Style="{StaticResource ToolBtn}" HorizontalContentAlignment="Left" Content="PNG image" Tag="png" Click="ExportFormat_Click"/>
+                                <Button Style="{StaticResource ToolBtn}" HorizontalContentAlignment="Left" Content="JPEG image" Tag="jpg" Click="ExportFormat_Click"/>
+                                <Button Style="{StaticResource ToolBtn}" HorizontalContentAlignment="Left" Content="PDF document" Tag="pdf" Click="ExportFormat_Click"/>
+                                <Button Style="{StaticResource ToolBtn}" HorizontalContentAlignment="Left" Content="BMP image" Tag="bmp" Click="ExportFormat_Click"/>
+                                <Button Style="{StaticResource ToolBtn}" HorizontalContentAlignment="Left" Content="TIFF image" Tag="tif" Click="ExportFormat_Click"/>
+                            </StackPanel>
+                        </Border>
+                    </Popup>
         </Grid>
 
     </DockPanel>

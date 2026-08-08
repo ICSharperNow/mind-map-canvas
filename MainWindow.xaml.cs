@@ -132,6 +132,7 @@ public partial class MainWindow : Window
         ("Rect", "▭", "Rectangle"),
         ("Pill", "▬", "Pill"),
         ("Ellipse", "⬭", "Ellipse"),
+        ("Circle", "◯", "Circle"),
         ("Diamond", "◇", "Diamond"),
         ("Hexagon", "⬡", "Hexagon"),
         ("Parallelogram", "▱", "Parallelogram"),
@@ -300,7 +301,7 @@ public partial class MainWindow : Window
 
             var preview = MakeShapeElement(kind);
             preview.Effect = null;
-            preview.Width = 46;
+            preview.Width = kind == "Circle" ? 30 : 46;
             preview.Height = 30;
             preview.Fill = new SolidColorBrush(Color.FromRgb(0xB9, 0xC4, 0xD8));
             preview.Stroke = new SolidColorBrush(Color.FromRgb(0x7A, 0x86, 0x99));
@@ -372,6 +373,30 @@ public partial class MainWindow : Window
         }
 
         BuildRecentSwatches();
+
+        foreach (var (cat, glyphs) in ClipartSets)
+        {
+            var head = new TextBlock
+            {
+                Text = cat.ToUpperInvariant(),
+                FontSize = 10,
+                FontWeight = FontWeights.SemiBold,
+                Opacity = 0.8,
+                Margin = new Thickness(4, 6, 0, 2)
+            };
+            head.SetResourceReference(TextBlock.ForegroundProperty, "Brush.SubtleText");
+            ClipartHost.Children.Add(head);
+            var wrap = new WrapPanel();
+            foreach (var g in glyphs)
+            {
+                var glyph = g;
+                var b = new Button { Content = glyph, Width = 36, Height = 34, Padding = new Thickness(0), FontSize = 17 };
+                b.SetResourceReference(StyleProperty, "ToolBtn");
+                b.Click += (s, a) => InsertClipart(glyph);
+                wrap.Children.Add(b);
+            }
+            ClipartHost.Children.Add(wrap);
+        }
 
         // Right-click menu for empty canvas: paste and quick actions.
         var canvasMenu = new ContextMenu();
@@ -542,14 +567,31 @@ public partial class MainWindow : Window
             return;
         }
 
+        ApplyDocument(doc);
+        _currentFile = path;
+        _dirty = false;
+        UpdateTitle();
+        ZoomToFit();
+    }
+
+    void ApplyDocument(DocumentModel doc)
+    {
         ClearDocument();
         foreach (var n in doc.Nodes) CreateNodeVisual(n);
         foreach (var c in doc.Connections) AddConnection(c.From, c.To, c.FromAnchor, c.ToAnchor, c.Color);
         if (doc.Cells != null)
             foreach (var cell in doc.Cells)
                 SetCell((cell.X, cell.Y), new CellData(cell.Color, cell.Opacity <= 0 ? 0.5 : cell.Opacity));
-        _currentFile = path;
-        _dirty = false;
+    }
+
+    void NewFromTemplate_Click(object sender, RoutedEventArgs e)
+    {
+        if (!ConfirmDiscard()) return;
+        var win = new TemplateWindow { Owner = this };
+        if (win.ShowDialog() != true || win.SelectedKey == null) return;
+        ApplyDocument(Templates.Build(win.SelectedKey));
+        _currentFile = null;
+        _dirty = true;
         UpdateTitle();
         ZoomToFit();
     }
@@ -669,6 +711,7 @@ public partial class MainWindow : Window
         Shape s = kind switch
         {
             "Ellipse" => new Ellipse(),
+            "Circle" => new Ellipse(),
             "Diamond" => new Polygon
             {
                 Points = new PointCollection { new(0.5, 0), new(1, 0.5), new(0.5, 1), new(0, 0.5) },
@@ -768,6 +811,7 @@ public partial class MainWindow : Window
         return m.Shape switch
         {
             "Ellipse" => new Thickness(w * 0.15, h * 0.13, w * 0.15, h * 0.13),
+            "Circle" => new Thickness(w * 0.16, h * 0.16, w * 0.16, h * 0.16),
             "Diamond" => new Thickness(w * 0.24, h * 0.24, w * 0.24, h * 0.24),
             "Hexagon" => new Thickness(w * 0.20, h * 0.10, w * 0.20, h * 0.10),
             "Parallelogram" => new Thickness(w * 0.22, h * 0.10, w * 0.22, h * 0.10),
@@ -1051,6 +1095,12 @@ public partial class MainWindow : Window
             Color = _lastColor,
             Shape = shapeKind ?? _lastShape
         };
+        if (m.Shape == "Circle")
+        {
+            m.W = m.H = 120;
+            m.X = worldCenter.X - 60;
+            m.Y = worldCenter.Y - 60;
+        }
         if (SnapCheck.IsChecked == true) { m.X = Snap(m.X); m.Y = Snap(m.Y); }
         var nv = CreateNodeVisual(m);
         // Select but don't auto-edit: the new shape can be dragged into place
@@ -1067,6 +1117,40 @@ public partial class MainWindow : Window
     }
 
     void AddText_Click(object sender, RoutedEventArgs e) => CreateTextAt(ViewCenterWorld());
+
+    static readonly (string Cat, string[] Glyphs)[] ClipartSets =
+    {
+        ("Ideas", new[] { "💡", "🎯", "🚀", "⭐", "🔥", "✅", "❌", "⚠️", "❓", "❗" }),
+        ("Office", new[] { "📈", "📊", "📉", "📋", "📎", "📁", "💼", "📝", "✏️", "📅" }),
+        ("People", new[] { "👤", "👥", "🧠", "💬", "🗣️", "👍", "👎", "🤝", "🏆", "🎉" }),
+        ("Tech", new[] { "💻", "🖥️", "📱", "⚙️", "🔧", "🛠️", "🔌", "🌐", "🖱️", "⌨️" }),
+        ("Nature", new[] { "🌱", "🌳", "🌍", "☀️", "🌙", "⚡", "🌈", "💧", "🍀", "🦋" }),
+        ("Misc", new[] { "⏰", "💰", "💲", "🏦", "📌", "🔒", "🔑", "🚩", "📍", "🎁" }),
+    };
+
+    void ClipartBtn_Click(object sender, RoutedEventArgs e) =>
+        ClipartPopup.IsOpen = !ClipartPopup.IsOpen;
+
+    void InsertClipart(string glyph)
+    {
+        ClipartPopup.IsOpen = false;
+        var c = ViewCenterWorld();
+        var m = new NodeModel
+        {
+            Kind = "Text",
+            Shape = "Rect",
+            Color = "#00FFFFFF",
+            Text = glyph,
+            FontSize = 44,
+            W = 96, H = 96,
+            X = c.X - 48, Y = c.Y - 48,
+            Align = "Center"
+        };
+        if (SnapCheck.IsChecked == true) { m.X = Snap(m.X); m.Y = Snap(m.Y); }
+        var nv = CreateNodeVisual(m);
+        SelectOnly(nv);
+        MarkDirty();
+    }
 
     void CreateTextAt(Point center)
     {
@@ -1842,6 +1926,7 @@ public partial class MainWindow : Window
             m.W = Math.Max(GridSize * 2, Snap(m.W));
             m.H = Math.Max(GridSize * 2, Snap(m.H));
         }
+        if (m.Shape == "Circle") m.W = m.H = Math.Max(m.W, m.H);
         nv.Root.Width = m.W;
         nv.Root.Height = m.H;
         UpdateTextInsets(nv);
@@ -2081,7 +2166,7 @@ public partial class MainWindow : Window
     static Point SideAnchorLocal(NodeModel m, Side side)
     {
         var raw = SideAnchorRaw(m, side);
-        if (m.Shape == "Ellipse" || ShapeOutlines.ContainsKey(m.Shape))
+        if (m.Shape == "Ellipse" || m.Shape == "Circle" || ShapeOutlines.ContainsKey(m.Shape))
             return EdgePointLocal(m, CenterOf(m), raw);
         return raw;
     }
@@ -2485,7 +2570,7 @@ public partial class MainWindow : Window
         double dx = to.X - from.X, dy = to.Y - from.Y;
         if (Math.Abs(dx) < 1e-9 && Math.Abs(dy) < 1e-9) return from;
 
-        if (m.Shape == "Ellipse")
+        if (m.Shape == "Ellipse" || m.Shape == "Circle")
         {
             double hw = m.W / 2, hh = m.H / 2;
             double te = 1 / Math.Sqrt(dx * dx / (hw * hw) + dy * dy / (hh * hh));
@@ -2784,6 +2869,7 @@ public partial class MainWindow : Window
                     m.W = Math.Max(NodeMinW, Snap(m.W));
                     m.H = Math.Max(NodeMinH, Snap(m.H));
                 }
+                if (m.Shape == "Circle") m.W = m.H = Math.Max(m.W, m.H);
                 var nv = CreateNodeVisual(m);
                 SelectOnly(nv);
                 MarkDirty();
@@ -2924,7 +3010,22 @@ public partial class MainWindow : Window
         Pan.Y = Viewport.ActualHeight / 2 - wy * _zoom;
     }
 
-    void UpdateZoomLabel() => ZoomLabel.Text = $"{Math.Round(_zoom * 100)}%";
+    bool _syncingZoom;
+
+    void UpdateZoomLabel()
+    {
+        ZoomLabel.Text = $"{Math.Round(_zoom * 100)}%";
+        if (ZoomSlider == null) return;
+        _syncingZoom = true;
+        ZoomSlider.Value = Math.Clamp(_zoom * 100, ZoomSlider.Minimum, ZoomSlider.Maximum);
+        _syncingZoom = false;
+    }
+
+    void ZoomSlider_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_syncingZoom || !IsLoaded) return;
+        SetZoom(e.NewValue / 100.0, new Point(Viewport.ActualWidth / 2, Viewport.ActualHeight / 2));
+    }
 
     Rect ContentBounds(double margin)
     {
