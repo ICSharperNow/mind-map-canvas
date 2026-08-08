@@ -89,6 +89,7 @@ public class NodeVisual
 {
     public NodeModel Model;
     public Grid Root;
+    public Grid Content;
     public Shape ShapeEl;
     public Image ImageEl;
     public RotateTransform Rot;
@@ -825,21 +826,24 @@ public partial class MainWindow : Window
         var shape = MakeShapeElement(m.Shape);
         shape.Fill = BrushFrom(m.Color);
         shape.Stroke = SoftBorderBrush;
-        if (m.Kind == "Zone") shape.Opacity = m.Opacity <= 0 ? 0.5 : m.Opacity;
         if (m.Kind == "Text") shape.Effect = null;
 
         var root = new Grid { Width = m.W, Height = m.H, Background = Brushes.Transparent };
         var rot = new RotateTransform(m.Rotation);
         root.RenderTransformOrigin = new Point(0.5, 0.5);
         root.RenderTransform = rot;
-        root.Children.Add(shape);
+        // Content layer: everything that should fade with the object's opacity,
+        // while selection handles stay fully visible.
+        var content = new Grid { Opacity = m.Opacity <= 0 ? 1 : m.Opacity };
+        root.Children.Add(content);
+        content.Children.Add(shape);
 
         Image img = null;
         if (m.Kind != "Shape" && !string.IsNullOrEmpty(m.ImageData))
         {
             img = new Image { Stretch = StretchOf(m.ImageFit), IsHitTestVisible = false, Margin = new Thickness(2) };
             try { img.Source = ImageFromBase64(m.ImageData); } catch { }
-            root.Children.Add(img);
+            content.Children.Add(img);
         }
         if (m.Kind == "Link")
         {
@@ -858,11 +862,11 @@ public partial class MainWindow : Window
                     TextTrimming = TextTrimming.CharacterEllipsis
                 }
             };
-            root.Children.Add(banner);
+            content.Children.Add(banner);
         }
 
-        root.Children.Add(label);
-        root.Children.Add(editor);
+        content.Children.Add(label);
+        content.Children.Add(editor);
 
         var rotHandle = new Border
         {
@@ -912,7 +916,7 @@ public partial class MainWindow : Window
 
         var nv = new NodeVisual
         {
-            Model = m, Root = root, ShapeEl = shape, ImageEl = img, Rot = rot,
+            Model = m, Root = root, Content = content, ShapeEl = shape, ImageEl = img, Rot = rot,
             RotHandle = rotHandle, Label = label, Editor = editor, Grip = grip
         };
 
@@ -1555,7 +1559,7 @@ public partial class MainWindow : Window
         ClearSelection();
         _selected.Add(nv.Model.Id);
         RefreshNodeChrome(nv);
-        if (nv.Model.Kind == "Zone")
+        if (nv.Model.Kind == "Zone" || nv.Model.Opacity < 1)
         {
             _syncingOpacity = true;
             PaintOpacity.Value = nv.Model.Opacity <= 0 ? 0.5 : nv.Model.Opacity;
@@ -2608,9 +2612,9 @@ public partial class MainWindow : Window
         bool any = false;
         foreach (var id in _selected)
         {
-            if (!_nodes.TryGetValue(id, out var nv) || nv.Model.Kind != "Zone") continue;
+            if (!_nodes.TryGetValue(id, out var nv)) continue;
             nv.Model.Opacity = PaintOpacity.Value;
-            nv.ShapeEl.Opacity = nv.Model.Opacity;
+            nv.Content.Opacity = nv.Model.Opacity;
             any = true;
         }
         if (any) MarkDirty();

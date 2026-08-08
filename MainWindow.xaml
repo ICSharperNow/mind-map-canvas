@@ -103,7 +103,7 @@
                 <Slider x:Name="PaintOpacity" Width="70" Minimum="0.1" Maximum="1" Value="0.5"
                         VerticalAlignment="Center" Margin="4,0,0,0"
                         ValueChanged="PaintOpacity_Changed"
-                        ToolTip="Zone opacity: adjusts selected zones live and sets the default for new ones"/>
+                        ToolTip="Opacity: adjusts every selected object live; also the default for new zones"/>
                 <Border Width="1" Height="26" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
 
                 <Button x:Name="ShapeBtn" Style="{StaticResource ToolBtn}" Click="ShapeBtn_Click"
