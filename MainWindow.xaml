@@ -22,7 +22,13 @@
                     <MenuItem Header="_Save" Click="Save_Click" InputGestureText="Ctrl+S"/>
                     <MenuItem Header="Save _As…" Click="SaveAs_Click" InputGestureText="Ctrl+Shift+S"/>
                     <Separator/>
-                    <MenuItem Header="_Export… (PNG, JPEG, PDF)" Click="Export_Click"/>
+                    <MenuItem Header="_Export as">
+                        <MenuItem Header="PNG image…" Tag="png" Click="ExportFormat_Click"/>
+                        <MenuItem Header="JPEG image…" Tag="jpg" Click="ExportFormat_Click"/>
+                        <MenuItem Header="PDF document…" Tag="pdf" Click="ExportFormat_Click"/>
+                        <MenuItem Header="BMP image…" Tag="bmp" Click="ExportFormat_Click"/>
+                        <MenuItem Header="TIFF image…" Tag="tif" Click="ExportFormat_Click"/>
+                    </MenuItem>
                     <Separator/>
                     <MenuItem Header="E_xit" Click="Exit_Click" InputGestureText="Alt+F4"/>
                 </MenuItem>
@@ -160,7 +166,25 @@
                 <Button Style="{StaticResource ToolBtn}" Click="Zoom100_Click" Content="100%" ToolTip="Reset zoom (Ctrl+0)"/>
                 <Border Width="1" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
 
-                <Button Style="{StaticResource ToolBtn}" Click="Export_Click" Content="Export…" ToolTip="Export the board as PNG, JPEG, PDF, BMP, or TIFF"/>
+                <Button x:Name="ExportBtn" Style="{StaticResource ToolBtn}" Click="ExportBtn_Click"
+                        Content="Export as ▾" ToolTip="Export the board as an image or PDF"/>
+                <Popup x:Name="ExportPopup" PlacementTarget="{Binding ElementName=ExportBtn}" Placement="Bottom"
+                       StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+                    <Border Background="{DynamicResource Brush.PanelBg}"
+                            BorderBrush="{DynamicResource Brush.PanelBorder}"
+                            BorderThickness="1" CornerRadius="10" Padding="6" Margin="10">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="18" ShadowDepth="3" Opacity="0.30"/>
+                        </Border.Effect>
+                        <StackPanel MinWidth="150">
+                            <Button Style="{StaticResource ToolBtn}" HorizontalContentAlignment="Left" Content="PNG image" Tag="png" Click="ExportFormat_Click"/>
+                            <Button Style="{StaticResource ToolBtn}" HorizontalContentAlignment="Left" Content="JPEG image" Tag="jpg" Click="ExportFormat_Click"/>
+                            <Button Style="{StaticResource ToolBtn}" HorizontalContentAlignment="Left" Content="PDF document" Tag="pdf" Click="ExportFormat_Click"/>
+                            <Button Style="{StaticResource ToolBtn}" HorizontalContentAlignment="Left" Content="BMP image" Tag="bmp" Click="ExportFormat_Click"/>
+                            <Button Style="{StaticResource ToolBtn}" HorizontalContentAlignment="Left" Content="TIFF image" Tag="tif" Click="ExportFormat_Click"/>
+                        </StackPanel>
+                    </Border>
+                </Popup>
             </StackPanel>
         </Border>
 

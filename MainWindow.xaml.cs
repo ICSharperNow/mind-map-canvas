@@ -1713,7 +1713,16 @@ public partial class MainWindow : Window
 
     // ---------- Export ----------
 
-    void Export_Click(object sender, RoutedEventArgs e)
+    void ExportBtn_Click(object sender, RoutedEventArgs e) =>
+        ExportPopup.IsOpen = !ExportPopup.IsOpen;
+
+    void ExportFormat_Click(object sender, RoutedEventArgs e)
+    {
+        ExportPopup.IsOpen = false;
+        ExportBoard((string)((FrameworkElement)sender).Tag);
+    }
+
+    void ExportBoard(string format)
     {
         CommitEdit();
         ClearSelection();
@@ -1724,11 +1733,19 @@ public partial class MainWindow : Window
             return;
         }
 
+        var (label, pattern) = format switch
+        {
+            "jpg" => ("JPEG image", "*.jpg"),
+            "pdf" => ("PDF document", "*.pdf"),
+            "bmp" => ("BMP image", "*.bmp"),
+            "tif" => ("TIFF image", "*.tif"),
+            _ => ("PNG image", "*.png")
+        };
         var dlg = new SaveFileDialog
         {
-            Filter = "PNG image (*.png)|*.png|JPEG image (*.jpg)|*.jpg|PDF document (*.pdf)|*.pdf|BMP image (*.bmp)|*.bmp|TIFF image (*.tif)|*.tif",
-            DefaultExt = ".png",
-            FileName = "mindmap.png"
+            Filter = $"{label} ({pattern})|{pattern}",
+            DefaultExt = "." + format,
+            FileName = "mindmap." + format
         };
         if (dlg.ShowDialog(this) != true) return;
 
@@ -1765,6 +1782,7 @@ public partial class MainWindow : Window
             var frame = BitmapFrame.Create(rtb);
 
             string ext = IOPath.GetExtension(dlg.FileName).ToLowerInvariant();
+            if (string.IsNullOrEmpty(ext)) ext = "." + format;
             if (ext == ".pdf")
             {
                 var jpeg = new JpegBitmapEncoder { QualityLevel = 92 };

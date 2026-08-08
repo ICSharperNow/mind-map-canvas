@@ -182,6 +182,43 @@
             </Setter>
         </Style>
 
+        <!-- Dropdown item that opens a nested submenu (e.g. File > Export as) -->
+        <ControlTemplate x:Key="SubmenuHeaderTemplate" TargetType="MenuItem">
+            <Grid>
+                <Border x:Name="bd" Background="Transparent" CornerRadius="6" Padding="12,7" Margin="1">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ContentPresenter ContentSource="Header" RecognizesAccessKey="True" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="1" Text="›" Margin="28,0,0,0" Opacity="0.55"
+                                   VerticalAlignment="Center" FontSize="14"/>
+                    </Grid>
+                </Border>
+                <Popup x:Name="PART_Popup" Placement="Right" HorizontalOffset="-6" VerticalOffset="-8"
+                       IsOpen="{TemplateBinding IsSubmenuOpen}"
+                       AllowsTransparency="True" Focusable="False" PopupAnimation="Fade">
+                    <Border Background="{DynamicResource Brush.PanelBg}"
+                            BorderBrush="{DynamicResource Brush.PanelBorder}"
+                            BorderThickness="1" CornerRadius="10" Padding="5" Margin="10">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="18" ShadowDepth="3" Opacity="0.30"/>
+                        </Border.Effect>
+                        <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle"/>
+                    </Border>
+                </Popup>
+            </Grid>
+            <ControlTemplate.Triggers>
+                <Trigger Property="IsHighlighted" Value="True">
+                    <Setter TargetName="bd" Property="Background" Value="{DynamicResource Brush.Hover}"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.4"/>
+                </Trigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+
         <!-- Dropdown / context-menu items -->
         <Style TargetType="MenuItem">
             <Setter Property="Foreground" Value="{DynamicResource Brush.Text}"/>
@@ -211,6 +248,11 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+            <Style.Triggers>
+                <Trigger Property="Role" Value="SubmenuHeader">
+                    <Setter Property="Template" Value="{StaticResource SubmenuHeaderTemplate}"/>
+                </Trigger>
+            </Style.Triggers>
         </Style>
 
         <!-- Context menu container -->
