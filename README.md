@@ -50,8 +50,8 @@ cd mind-map-canvas
 dotnet run
 ```
 
-Requires the .NET 8 SDK. Opening a `.json` board from the command line works too:
-`MindMapCanvas.exe myboard.json`.
+Requires the .NET 8 SDK. Opening a board from the command line works too:
+`MindMapCanvas.exe myboard.mindmap`.
 
 ## Features
 
@@ -65,8 +65,11 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
   dragging, shapes snap to the edges and centers of nearby shapes on both axes with
   dashed guide lines showing the alignment
 - **Zones** (`P` or the ▧ Zone button): drag out a background area that snaps to grid
-  cells - a movable, resizable object behind your shapes for grouping regions of the
-  board; the opacity slider adjusts selected zones live and sets the default for new ones
+  cells - a movable, resizable object behind your shapes for grouping regions of the board
+- **Per-object opacity**: the toolbar slider fades any selected object live (shapes,
+  text, images, links, zones) and sets the default for new zones
+- **Layering**: Bring to front / Send to back on every object's right-click menu,
+  preserved in the save file
 
 ### Shapes
 - Ten shapes: **rectangle, pill, ellipse, perfect circle, diamond, hexagon,
@@ -86,9 +89,13 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
 - Drag a dot onto another shape to draw an arrow - while dragging, a ring previews the
   exact dot it will snap to, and the connection **stays pinned to those dots** on both
   ends as the shapes move
-- Right-click an arrow to **recolor it** (presets or the custom picker, applied to one
-  or all connectors), reverse its direction, or delete it; new connections reuse your
-  last connector color
+- **Multiple connections** between the same two objects, as long as they use different
+  dot pairs
+- While dragging, the target shape lights up **all of its connector dots** so every
+  snap point is visible before you release
+- Right-click an arrow to **recolor it** (pick a color, then apply to this connector or
+  all of them), reverse its direction, or delete it; new connections reuse your last
+  connector color
 - Arrows and connector dots hug the true outline of ellipses and diamonds - no floating
   gaps on curved shapes
 - Connector dots, grips, and rotation handles **auto-scale with zoom** so they stay
@@ -102,19 +109,23 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
 - Image fit modes via right-click: **Fit, Fill, Stretch, Center**
 - **Import links** (🔗 or File > Import link): the page is loaded off-screen and a real
   **preview screenshot** becomes the shape's content, with a domain banner; double-click
-  opens the link in your browser, right-click offers Open and Refresh preview
-  (falls back to a simple link card if the page can't load)
+  opens the link in your browser, right-click offers Open, Change address, and
+  Refresh preview (falls back to a simple link card if the page can't load)
 
 ### Clipart & templates
-- **Clipart gallery** (😀 Clipart): sixty symbols across six categories, dropped onto the
-  board as transparent, resizable, connectable objects
+- **Clipart gallery** (😀 Clipart): 120 symbols across ten categories, in matching
+  **Color** and **Black & white** tabs - color clipart inserts as crisp scalable images,
+  monochrome clipart stays recolorable text that scales with its box
 - **Start from a template** (File > New > From template): mind map, flowchart, SWOT,
-  kanban, org chart, or timeline starter boards
+  kanban, org chart, or timeline starter boards, each with a rendered layout preview
 
 ### Text
 - Double-click a shape to type; Enter commits, Shift+Enter adds a newline
 - Per-shape **font family, size, bold, italic, alignment, and text color** via the
-  `Aa Format text` dropdown (eight fonts included)
+  `Aa Format text` dropdown (eight fonts included) - every option **live-previews on
+  hover** before you click
+- **Scale text with size** (right-click toggle): the font grows and shrinks with the
+  object when resizing
 - **Text boxes**: lightweight single-line-by-default text objects with optional or
   transparent backgrounds - same formatting, rotation, resize, and connector support
 
@@ -130,8 +141,9 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
 - **Settings panel**: theme, grid visibility, default snap-to-grid, and whether the app
   remembers your last-used shape and color
 - **Grouped toolbar** (Insert / Format / Board / Edit) with captions, Office-style
-- **Right-click menus everywhere**: shapes (edit/duplicate/copy/cut/delete), connections
-  (reverse/delete), and empty canvas (paste/add shape/select all/zoom to fit)
+- **Right-click menus everywhere**: objects (edit / duplicate / copy / cut / layering /
+  delete), connections (color / reverse / delete), and empty canvas (paste, add any
+  shape or a text box at the click point, select all, zoom to fit)
 
 ## Controls
 
@@ -148,7 +160,8 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
 | Connect shapes | Hover a shape, drag any of its 8 dots onto another shape |
 | Pan | Drag empty canvas, middle-drag, or Space+drag |
 | Add zone | `P` (or ▧ Zone), drag an area; snaps to grid cells |
-| Zone opacity | Toolbar slider, live while a zone is selected |
+| Object opacity | Toolbar slider, live for any selected object |
+| Insert clipart | 😀 Clipart, Color or Black & white tab |
 | Add text box | T Text button, or right-click canvas |
 | Zoom | Mouse wheel, Ctrl +/−, Fit, 100% |
 | Box select | Shift+drag (Ctrl+drag adds to selection) |
@@ -182,16 +195,22 @@ versions still open via File > Open:
 }
 ```
 
-A ready-made example lives at [`docs/demo-board.json`](docs/demo-board.json) -
-open it with **File → Open** or pass it on the command line.
+Nodes also carry optional fields for kind (shape / text / image / link / zone),
+rotation, opacity, layer order, font, and embedded image data. A ready-made example
+lives at [`docs/demo-board.json`](docs/demo-board.json) - open it with **File → Open**
+or pass it on the command line.
 
 ## Building the installer
 
 The MSI is authored with [WiX v5](https://wixtoolset.org/) (`installer/Product.wxs`):
 
 ```bash
-dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true
+dotnet publish -c Release -r win-x64 --self-contained true
 dotnet tool install --global wix --version 5.0.2
 wix build -arch x64 -d PublishDir=bin/Release/net8.0-windows/win-x64/publish \
     -d AssetsDir=Assets -o dist/MindMapCanvas-Setup.msi installer/Product.wxs
 ```
+
+The installer registers the `.mindmap` file type and installs Start-menu and desktop
+shortcuts; the portable exe is a separate single-file publish
+(`-p:PublishSingleFile=true`).
