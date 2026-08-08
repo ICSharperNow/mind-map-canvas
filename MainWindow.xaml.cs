@@ -566,7 +566,10 @@ public partial class MainWindow : Window
     {
         double k = HandleScaleFactor();
         foreach (var nv in _nodes.Values)
+        {
             nv.HandleScaleT.ScaleX = nv.HandleScaleT.ScaleY = k;
+            UpdateHandlePositions(nv);
+        }
         double hit = Math.Max(10, 14 * k);
         foreach (var cv in _conns)
             cv.Hit.StrokeThickness = hit;
@@ -780,9 +783,6 @@ public partial class MainWindow : Window
             Background = Brushes.White,
             BorderBrush = AccentBrush,
             BorderThickness = new Thickness(1.5),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(0, -30, 0, 0),
             Cursor = Cursors.Hand,
             Visibility = Visibility.Collapsed,
             ToolTip = "Drag to rotate (hold Shift for 15° steps)",
@@ -797,7 +797,11 @@ public partial class MainWindow : Window
                 Margin = new Thickness(0, -1, 0, 0)
             }
         };
-        root.Children.Add(rotHandle);
+        // Handles live on a Canvas overlay: unlike Grid margins, Canvas children
+        // are never clipped when positioned past the node's edges.
+        var handleLayer = new Canvas { IsHitTestVisible = true };
+        root.Children.Add(handleLayer);
+        handleLayer.Children.Add(rotHandle);
 
         Canvas.SetLeft(root, m.X);
         Canvas.SetTop(root, m.Y);
@@ -818,7 +822,7 @@ public partial class MainWindow : Window
         {
             var handle = MakeHandle(nv, side);
             nv.Handles.Add(handle);
-            root.Children.Add(handle);
+            handleLayer.Children.Add(handle);
         }
         UpdateHandlePositions(nv);
         grip.RenderTransformOrigin = new Point(0.5, 0.5);
@@ -1780,7 +1784,9 @@ public partial class MainWindow : Window
         return el;
     }
 
-    // Position each connector dot on the shape outline; called on create/resize/reshape.
+    // Position each connector dot on the shape outline; called on create/resize/
+    // reshape/zoom. The rotate button floats above the top edge, backing away as
+    // the handles scale up so nothing overlaps.
     void UpdateHandlePositions(NodeVisual nv)
     {
         var m = nv.Model;
@@ -1788,8 +1794,13 @@ public partial class MainWindow : Window
         foreach (Side side in Enum.GetValues<Side>())
         {
             var p = SideAnchorLocal(m, side);
-            nv.Handles[i++].Margin = new Thickness(p.X - m.X - 6, p.Y - m.Y - 6, 0, 0);
+            var el = nv.Handles[i++];
+            Canvas.SetLeft(el, p.X - m.X - 6);
+            Canvas.SetTop(el, p.Y - m.Y - 6);
         }
+        double k = HandleScaleFactor();
+        Canvas.SetLeft(nv.RotHandle, m.W / 2 - 9);
+        Canvas.SetTop(nv.RotHandle, -(12 + 24 * k));
     }
 
     void ShowHandles(NodeVisual nv, bool show)

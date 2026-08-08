@@ -9,7 +9,7 @@
     <RootNamespace>MindMapCanvas</RootNamespace>
     <AssemblyName>MindMapCanvas</AssemblyName>
     <ApplicationIcon>Assets/app.ico</ApplicationIcon>
-    <Version>1.5.1</Version>
+    <Version>1.5.2</Version>
     <AssemblyTitle>MindMap Canvas</AssemblyTitle>
     <Product>MindMap Canvas</Product>
     <ApplicationManifest></ApplicationManifest>
