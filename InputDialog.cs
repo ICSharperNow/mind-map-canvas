@@ -12,7 +12,7 @@ public class InputDialog : Window
     readonly TextBox _box;
     bool _ok;
 
-    InputDialog(Window owner, string title, string prompt, string initial)
+    InputDialog(Window owner, string title, string prompt, string initial, string placeholder)
     {
         Owner = owner;
         WindowStyle = WindowStyle.None;
@@ -36,6 +36,25 @@ public class InputDialog : Window
             if (e.Key == Key.Enter) { _ok = true; Close(); }
         };
 
+        var hint = new TextBlock
+        {
+            Text = placeholder ?? "",
+            FontSize = 13,
+            Margin = new Thickness(10, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            IsHitTestVisible = false,
+            Opacity = 0.5,
+            Visibility = string.IsNullOrEmpty(placeholder) || !string.IsNullOrEmpty(_box.Text)
+                ? Visibility.Collapsed : Visibility.Visible
+        };
+        hint.SetResourceReference(TextBlock.ForegroundProperty, "Brush.SubtleText");
+        _box.TextChanged += (s, e) =>
+            hint.Visibility = string.IsNullOrEmpty(_box.Text) && !string.IsNullOrEmpty(placeholder)
+                ? Visibility.Visible : Visibility.Collapsed;
+        var boxHost = new Grid();
+        boxHost.Children.Add(_box);
+        boxHost.Children.Add(hint);
+
         var cancel = new Button { Content = "Cancel", MinWidth = 84 };
         cancel.SetResourceReference(StyleProperty, "DlgSecondary");
         cancel.Click += (s, e) => Close();
@@ -55,7 +74,7 @@ public class InputDialog : Window
         var stack = new StackPanel { Margin = new Thickness(26, 22, 26, 22) };
         stack.Children.Add(titleText);
         stack.Children.Add(promptText);
-        stack.Children.Add(_box);
+        stack.Children.Add(boxHost);
         stack.Children.Add(buttons);
 
         var root = new Border
@@ -81,9 +100,9 @@ public class InputDialog : Window
         Loaded += (s, e) => { _box.Focus(); _box.CaretIndex = _box.Text.Length; };
     }
 
-    public static string Show(Window owner, string title, string prompt, string initial = "")
+    public static string Show(Window owner, string title, string prompt, string initial = "", string placeholder = null)
     {
-        var d = new InputDialog(owner, title, prompt, initial);
+        var d = new InputDialog(owner, title, prompt, initial, placeholder);
         d.ShowDialog();
         return d._ok ? d._box.Text.Trim() : null;
     }

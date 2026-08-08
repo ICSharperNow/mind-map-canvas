@@ -15,6 +15,7 @@ public class AppSettings
     public string CustomPanel { get; set; } = "#2B3442";
     public string CustomCanvas { get; set; } = "#26303C";
     public string CustomAccent { get; set; } = "#7FA3E0";
+    public string LastConnColor { get; set; }
 }
 
 public static class SettingsStore

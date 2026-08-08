@@ -34,7 +34,9 @@ public class NodeModel
     public bool Bold { get; set; }
     public bool Italic { get; set; }
     public double Rotation { get; set; }
-    public string Kind { get; set; } = "Shape";   // Shape | Image | Link
+    public double Opacity { get; set; } = 1.0;
+    public string Font { get; set; } = "Segoe UI";
+    public string Kind { get; set; } = "Shape";   // Shape | Image | Link | Zone | Text
     public string ImageData { get; set; }          // base64 image for Image/Link previews
     public string ImageFit { get; set; } = "Fit";  // Fit | Fill | Stretch | Center
     public string Url { get; set; }
@@ -46,7 +48,7 @@ public class NodeModel
         Text = Text, Color = Color, Shape = Shape,
         FontSize = FontSize, TextColor = TextColor, Align = Align,
         Bold = Bold, Italic = Italic,
-        Rotation = Rotation, Kind = Kind,
+        Rotation = Rotation, Kind = Kind, Opacity = Opacity, Font = Font,
         ImageData = ImageData, ImageFit = ImageFit, Url = Url
     };
 }
@@ -172,23 +174,14 @@ public partial class MainWindow : Window
     AppSettings _settings = new();
     Point _canvasMenuPos;
 
-    // Painted grid cells, keyed by (column, row).
+    // Painted grid cells from older board files (legacy, render-only).
     readonly Dictionary<(int, int), CellData> _cellColors = new();
     readonly Dictionary<(int, int), Rectangle> _cellRects = new();
-    bool _painting, _erasing, _areaPainting, _areaErase;
-    Point _lastPaintWorld, _areaStart;
+    bool _areaPainting;
+    Point _areaStart;
     Rectangle _areaRect;
-
-    sealed class PaintOp
-    {
-        public readonly List<((int, int) Key, CellData? Before, CellData? After)> Changes = new();
-    }
-
-    bool _erasePendingStart;
-    Point _erasePressPos;
-
-    readonly List<PaintOp> _paintUndo = new();
-    PaintOp _activeOp;
+    bool _syncingOpacity;
+    string _lastConnColor;
 
     readonly List<NodeModel> _clipboardNodes = new();
     readonly List<ConnectionModel> _clipboardConns = new();
@@ -211,6 +204,7 @@ public partial class MainWindow : Window
     {
         _settings = SettingsStore.Load();
         SnapCheck.IsChecked = _settings.SnapToGrid;
+        _lastConnColor = _settings.LastConnColor;
         if (_settings.RememberLastStyle)
         {
             if (!string.IsNullOrEmpty(_settings.LastColor)) _lastColor = _settings.LastColor;
@@ -240,7 +234,46 @@ public partial class MainWindow : Window
             };
             PaletteWrap.Children.Add(sw);
         }
+        var noneSw = new Border
+        {
+            Width = 22, Height = 22,
+            CornerRadius = new CornerRadius(6),
+            Background = Brushes.White,
+            BorderBrush = SoftBorderBrush,
+            BorderThickness = new Thickness(1),
+            Margin = new Thickness(2),
+            Cursor = Cursors.Hand,
+            ToolTip = "Transparent (no fill)",
+            Child = new Line
+            {
+                X1 = 3, Y1 = 17, X2 = 17, Y2 = 3,
+                Stroke = new SolidColorBrush(Color.FromRgb(0xE5, 0x48, 0x4D)),
+                StrokeThickness = 2
+            }
+        };
+        noneSw.MouseLeftButtonDown += (s, a) =>
+        {
+            ApplyColor("#00FFFFFF");
+            ColorPopup.IsOpen = false;
+            a.Handled = true;
+        };
+        PaletteWrap.Children.Add(noneSw);
         CurrentColorSwatch.Background = BrushFrom(_lastColor);
+
+        foreach (var f in new[] { "Segoe UI", "Arial", "Georgia", "Times New Roman", "Consolas", "Comic Sans MS", "Impact", "Calibri" })
+        {
+            var fam = f;
+            var fb = new Button
+            {
+                Content = fam == "Times New Roman" ? "Times" : fam == "Comic Sans MS" ? "Comic Sans" : fam,
+                FontFamily = new FontFamily(fam),
+                Width = 108,
+                HorizontalContentAlignment = HorizontalAlignment.Left
+            };
+            fb.SetResourceReference(StyleProperty, "ToolBtn");
+            fb.Click += (s, a) => ApplyTextFormat(mm => mm.Font = fam);
+            FontWrap.Children.Add(fb);
+        }
 
         foreach (var def in ShapeDefs)
         {
@@ -316,13 +349,22 @@ public partial class MainWindow : Window
         var miPaste = new MenuItem { Header = "Paste", InputGestureText = "Ctrl+V" };
         miPaste.Click += (s, a) => PasteAt(_canvasMenuPos);
         var miAddHere = new MenuItem { Header = "Add shape here" };
-        miAddHere.Click += (s, a) => CreateNoteAt(_canvasMenuPos);
+        foreach (var def in ShapeDefs)
+        {
+            var kind = def.Kind;
+            var sub = new MenuItem { Header = def.Name };
+            sub.Click += (s, a) => CreateNoteAt(_canvasMenuPos, kind);
+            miAddHere.Items.Add(sub);
+        }
+        var miTextHere = new MenuItem { Header = "Add text box here" };
+        miTextHere.Click += (s, a) => CreateTextAt(_canvasMenuPos);
         var miSelAll = new MenuItem { Header = "Select all", InputGestureText = "Ctrl+A" };
         miSelAll.Click += (s, a) => SelectAllNodes();
         var miFit = new MenuItem { Header = "Zoom to fit" };
         miFit.Click += (s, a) => ZoomToFit();
         canvasMenu.Items.Add(miPaste);
         canvasMenu.Items.Add(miAddHere);
+        canvasMenu.Items.Add(miTextHere);
         canvasMenu.Items.Add(new Separator());
         canvasMenu.Items.Add(miSelAll);
         canvasMenu.Items.Add(miFit);
@@ -496,15 +538,10 @@ public partial class MainWindow : Window
         _draggingNodes = false;
         _cellColors.Clear();
         _cellRects.Clear();
-        _painting = false;
-        _erasing = false;
         _areaPainting = false;
         _areaRect = null;
-        _paintUndo.Clear();
-        _activeOp = null;
         _guideV = null;
         _guideH = null;
-        UpdateUndoBtn();
     }
 
     void MarkDirty()
@@ -530,18 +567,23 @@ public partial class MainWindow : Window
 
     static ControlTemplate CreateGripTemplate()
     {
-        // Classic diagonal-lines resize glyph instead of a plain square.
-        var path = new FrameworkElementFactory(typeof(System.Windows.Shapes.Path));
-        path.SetValue(System.Windows.Shapes.Path.DataProperty, Geometry.Parse("M11,3 L3,11 M11,7 L7,11"));
-        path.SetValue(Shape.StrokeProperty, new SolidColorBrush(Color.FromArgb(0x8C, 0x00, 0x00, 0x00)));
-        path.SetValue(Shape.StrokeThicknessProperty, 1.6);
-        path.SetValue(Shape.StrokeStartLineCapProperty, PenLineCap.Round);
-        path.SetValue(Shape.StrokeEndLineCapProperty, PenLineCap.Round);
+        // Circular badge with a diagonal double-arrow, matching the rotate handle.
+        var text = new FrameworkElementFactory(typeof(TextBlock));
+        text.SetValue(TextBlock.TextProperty, "⤡");
+        text.SetValue(TextBlock.FontSizeProperty, 13.0);
+        text.SetValue(TextBlock.FontWeightProperty, FontWeights.Bold);
+        text.SetValue(TextBlock.ForegroundProperty, AccentBrush);
+        text.SetValue(HorizontalAlignmentProperty, HorizontalAlignment.Center);
+        text.SetValue(VerticalAlignmentProperty, VerticalAlignment.Center);
+        text.SetValue(TextBlock.MarginProperty, new Thickness(0, -1, 0, 0));
 
-        var root = new FrameworkElementFactory(typeof(Border));
-        root.SetValue(Border.BackgroundProperty, Brushes.Transparent);
-        root.AppendChild(path);
-        return new ControlTemplate(typeof(Thumb)) { VisualTree = root };
+        var badge = new FrameworkElementFactory(typeof(Border));
+        badge.SetValue(Border.BackgroundProperty, Brushes.White);
+        badge.SetValue(Border.CornerRadiusProperty, new CornerRadius(11));
+        badge.SetValue(Border.BorderBrushProperty, AccentBrush);
+        badge.SetValue(Border.BorderThicknessProperty, new Thickness(1.5));
+        badge.AppendChild(text);
+        return new ControlTemplate(typeof(Thumb)) { VisualTree = badge };
     }
 
     static readonly DropShadowEffect NodeShadow = MakeFrozen(new DropShadowEffect
@@ -686,6 +728,7 @@ public partial class MainWindow : Window
             "Triangle" => new Thickness(w * 0.22, h * 0.42, w * 0.22, h * 0.06),
             "Trapezoid" => new Thickness(w * 0.22, h * 0.10, w * 0.22, h * 0.08),
             "Octagon" => new Thickness(w * 0.15, h * 0.12, w * 0.15, h * 0.12),
+            _ when m.Kind == "Text" => new Thickness(10, 6, 10, 6),
             _ => new Thickness(12)
         };
     }
@@ -726,18 +769,18 @@ public partial class MainWindow : Window
 
         var grip = new Thumb
         {
-            Width = 15, Height = 15,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Bottom,
-            Margin = new Thickness(0, 0, 2, 2),
+            Width = 22, Height = 22,
             Cursor = Cursors.SizeNWSE,
             Visibility = Visibility.Collapsed,
+            ToolTip = "Drag to resize",
             Template = CreateGripTemplate()
         };
 
         var shape = MakeShapeElement(m.Shape);
         shape.Fill = BrushFrom(m.Color);
         shape.Stroke = SoftBorderBrush;
+        if (m.Kind == "Zone") shape.Opacity = m.Opacity <= 0 ? 0.5 : m.Opacity;
+        if (m.Kind == "Text") shape.Effect = null;
 
         var root = new Grid { Width = m.W, Height = m.H, Background = Brushes.Transparent };
         var rot = new RotateTransform(m.Rotation);
@@ -774,12 +817,11 @@ public partial class MainWindow : Window
 
         root.Children.Add(label);
         root.Children.Add(editor);
-        root.Children.Add(grip);
 
         var rotHandle = new Border
         {
-            Width = 18, Height = 18,
-            CornerRadius = new CornerRadius(9),
+            Width = 21, Height = 21,
+            CornerRadius = new CornerRadius(10.5),
             Background = Brushes.White,
             BorderBrush = AccentBrush,
             BorderThickness = new Thickness(1.5),
@@ -789,12 +831,12 @@ public partial class MainWindow : Window
             Child = new TextBlock
             {
                 Text = "⟳",
-                FontSize = 11,
+                FontSize = 15,
                 FontWeight = FontWeights.Bold,
                 Foreground = AccentBrush,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, -1, 0, 0)
+                Margin = new Thickness(0, -2, 0, 0)
             }
         };
         // Handles live on a Canvas overlay: unlike Grid margins, Canvas children
@@ -802,10 +844,12 @@ public partial class MainWindow : Window
         var handleLayer = new Canvas { IsHitTestVisible = true };
         root.Children.Add(handleLayer);
         handleLayer.Children.Add(rotHandle);
+        handleLayer.Children.Add(grip);
 
         Canvas.SetLeft(root, m.X);
         Canvas.SetTop(root, m.Y);
-        Panel.SetZIndex(root, ++_zTop);
+        // Zones live behind connections and shapes.
+        Panel.SetZIndex(root, m.Kind == "Zone" ? 1 : ++_zTop);
 
         var nv = new NodeVisual
         {
@@ -850,7 +894,18 @@ public partial class MainWindow : Window
             miOpen.Click += (s, e) => OpenUrl(nv.Model.Url);
             var miRefresh = new MenuItem { Header = "Refresh preview" };
             miRefresh.Click += async (s, e) => await RefreshLinkPreview(nv);
+            var miChange = new MenuItem { Header = "Change address…" };
+            miChange.Click += async (s, e) =>
+            {
+                var newUrl = InputDialog.Show(this, "Change link", "Web address:", nv.Model.Url ?? "", "https://github.com");
+                if (string.IsNullOrWhiteSpace(newUrl) || newUrl == nv.Model.Url) return;
+                if (!newUrl.Contains("://")) newUrl = "https://" + newUrl;
+                nv.Model.Url = newUrl;
+                MarkDirty();
+                await RefreshLinkPreview(nv);
+            };
             menu.Items.Add(miOpen);
+            menu.Items.Add(miChange);
             menu.Items.Add(miRefresh);
             menu.Items.Add(new Separator());
         }
@@ -906,7 +961,7 @@ public partial class MainWindow : Window
         return nv;
     }
 
-    void CreateNoteAt(Point worldCenter)
+    void CreateNoteAt(Point worldCenter, string shapeKind = null)
     {
         CommitEdit();
         var m = new NodeModel
@@ -914,7 +969,7 @@ public partial class MainWindow : Window
             X = worldCenter.X - 84,
             Y = worldCenter.Y - 48,
             Color = _lastColor,
-            Shape = _lastShape
+            Shape = shapeKind ?? _lastShape
         };
         if (SnapCheck.IsChecked == true) { m.X = Snap(m.X); m.Y = Snap(m.Y); }
         var nv = CreateNodeVisual(m);
@@ -929,6 +984,28 @@ public partial class MainWindow : Window
         var wx = (Viewport.ActualWidth / 2 - Pan.X) / _zoom;
         var wy = (Viewport.ActualHeight / 2 - Pan.Y) / _zoom;
         CreateNoteAt(new Point(wx, wy));
+    }
+
+    void AddText_Click(object sender, RoutedEventArgs e) => CreateTextAt(ViewCenterWorld());
+
+    void CreateTextAt(Point center)
+    {
+        CommitEdit();
+        var m = new NodeModel
+        {
+            Kind = "Text",
+            Shape = "Rect",
+            Color = "#00FFFFFF",
+            W = 240, H = 44,
+            X = center.X - 120, Y = center.Y - 22,
+            Align = "Left",
+            FontSize = 14
+        };
+        if (SnapCheck.IsChecked == true) { m.X = Snap(m.X); m.Y = Snap(m.Y); }
+        var nv = CreateNodeVisual(m);
+        SelectOnly(nv);
+        MarkDirty();
+        BeginEdit(nv);
     }
 
     // ---------- Media import ----------
@@ -1010,8 +1087,8 @@ public partial class MainWindow : Window
 
     async void ImportLink_Click(object sender, RoutedEventArgs e)
     {
-        var url = InputDialog.Show(this, "Add link", "Web address:", "https://");
-        if (string.IsNullOrWhiteSpace(url) || url == "https://") return;
+        var url = InputDialog.Show(this, "Add link", "Web address:", "", "https://github.com");
+        if (string.IsNullOrWhiteSpace(url)) return;
         if (!url.Contains("://")) url = "https://" + url;
 
         Mouse.OverrideCursor = Cursors.Wait;
@@ -1054,16 +1131,13 @@ public partial class MainWindow : Window
         try { shot = await CaptureUrlPreviewAsync(nv.Model.Url); }
         catch { }
         finally { Mouse.OverrideCursor = null; }
-        if (shot == null)
-        {
-            ModernDialog.Show(this, "Preview failed",
-                "The page could not be loaded for a preview. Check the address and your connection.", "OK");
-            return;
-        }
-        nv.Model.ImageData = Convert.ToBase64String(shot);
+        if (shot != null) nv.Model.ImageData = Convert.ToBase64String(shot);
         var replacement = CreateReplacementVisual(nv);
         MarkDirty();
         SelectOnly(replacement);
+        if (shot == null)
+            ModernDialog.Show(this, "Preview failed",
+                "The page could not be loaded for a preview. Check the address and your connection.", "OK");
     }
 
     // Rebuilds a node's visuals from its model (used when content changes shape).
@@ -1129,7 +1203,8 @@ public partial class MainWindow : Window
         nv.Label.FontWeight = m.Bold ? FontWeights.Bold : FontWeights.Normal;
         if (string.IsNullOrWhiteSpace(m.Text))
         {
-            nv.Label.Text = "Double-click to edit";
+            bool wantsPlaceholder = m.Kind == "Shape" || m.Kind == "Text";
+            nv.Label.Text = wantsPlaceholder ? "Double-click to edit" : "";
             nv.Label.Foreground = PlaceholderBrush;
             nv.Label.FontStyle = FontStyles.Italic;
         }
@@ -1144,6 +1219,9 @@ public partial class MainWindow : Window
     void ApplyTextStyle(NodeVisual nv)
     {
         var m = nv.Model;
+        var ff = new FontFamily(string.IsNullOrEmpty(m.Font) ? "Segoe UI" : m.Font);
+        nv.Label.FontFamily = ff;
+        nv.Editor.FontFamily = ff;
         nv.Editor.FontSize = m.FontSize;
         nv.Editor.TextAlignment = AlignOf(m.Align);
         nv.Editor.FontWeight = m.Bold ? FontWeights.Bold : FontWeights.Normal;
@@ -1304,11 +1382,12 @@ public partial class MainWindow : Window
     {
         bool highlighted = _selected.Contains(nv.Model.Id) || _linkHover == nv;
         nv.ShapeEl.Stroke = highlighted ? AccentBrush : SoftBorderBrush;
+        if (nv.Model.Kind == "Text" && !highlighted) nv.ShapeEl.Stroke = Brushes.Transparent;
         nv.ShapeEl.StrokeThickness = highlighted ? 3 : 1;
         nv.ShapeEl.Effect = highlighted ? SelectedGlow : NodeShadow;
         var sel = _selected.Contains(nv.Model.Id) ? Visibility.Visible : Visibility.Collapsed;
         nv.Grip.Visibility = sel;
-        nv.RotHandle.Visibility = sel;
+        nv.RotHandle.Visibility = nv.Model.Kind == "Zone" ? Visibility.Collapsed : sel;
     }
 
     // ---------- Rotation ----------
@@ -1359,6 +1438,12 @@ public partial class MainWindow : Window
         ClearSelection();
         _selected.Add(nv.Model.Id);
         RefreshNodeChrome(nv);
+        if (nv.Model.Kind == "Zone")
+        {
+            _syncingOpacity = true;
+            PaintOpacity.Value = nv.Model.Opacity <= 0 ? 0.5 : nv.Model.Opacity;
+            _syncingOpacity = false;
+        }
     }
 
     void ToggleSelect(NodeVisual nv)
@@ -1478,7 +1563,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        Panel.SetZIndex(nv.Root, ++_zTop);
+        if (nv.Model.Kind != "Zone") Panel.SetZIndex(nv.Root, ++_zTop);
         bool ctrl = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
         if (ctrl) ToggleSelect(nv);
         else if (!_selected.Contains(nv.Model.Id)) SelectOnly(nv);
@@ -1626,6 +1711,11 @@ public partial class MainWindow : Window
         var m = nv.Model;
         m.W = Math.Max(NodeMinW, m.W + e.HorizontalChange);
         m.H = Math.Max(NodeMinH, m.H + e.VerticalChange);
+        if (m.Kind == "Zone")
+        {
+            m.W = Math.Max(GridSize * 2, Snap(m.W));
+            m.H = Math.Max(GridSize * 2, Snap(m.H));
+        }
         nv.Root.Width = m.W;
         nv.Root.Height = m.H;
         UpdateTextInsets(nv);
@@ -1807,12 +1897,15 @@ public partial class MainWindow : Window
             Canvas.SetTop(el, p.Y - m.Y - 6);
         }
         double k = HandleScaleFactor();
-        Canvas.SetLeft(nv.RotHandle, m.W / 2 - 9);
+        Canvas.SetLeft(nv.RotHandle, m.W / 2 - 10.5);
         Canvas.SetTop(nv.RotHandle, -(12 + 24 * k));
+        Canvas.SetLeft(nv.Grip, m.W + 8 + 10 * k - 11);
+        Canvas.SetTop(nv.Grip, m.H + 8 + 10 * k - 11);
     }
 
     void ShowHandles(NodeVisual nv, bool show)
     {
+        if (nv.Model.Kind == "Zone") show = false;
         var vis = show ? Visibility.Visible : Visibility.Collapsed;
         foreach (var h in nv.Handles) h.Visibility = vis;
     }
@@ -1969,7 +2062,7 @@ public partial class MainWindow : Window
         CancelLink();
         if (target != null &&
             AddConnection(src.Model.Id, target.Model.Id,
-                srcSide.ToString(), NearestAnchor(target.Model, p)) != null)
+                srcSide.ToString(), NearestAnchor(target.Model, p), _lastConnColor) != null)
             MarkDirty();
         if (!src.Root.IsMouseOver) ShowHandles(src, false);
         e.Handled = true;
@@ -2016,6 +2109,9 @@ public partial class MainWindow : Window
     void SetConnColor(ConnectionVisual cv, string hex)
     {
         cv.Model.Color = hex;
+        _lastConnColor = hex;
+        _settings.LastConnColor = hex;
+        SettingsStore.Save(_settings);
         if (_selectedConn != cv)
         {
             cv.Body.Stroke = ConnStrokeOf(cv);
@@ -2096,6 +2192,25 @@ public partial class MainWindow : Window
         };
         colorMenu.Items.Add(miCustomConn);
         connMenu.Items.Add(colorMenu);
+
+        var miAllColor = new MenuItem { Header = "Apply this color to all connectors" };
+        miAllColor.Click += (s, e) =>
+        {
+            foreach (var other in _conns)
+            {
+                other.Model.Color = cv.Model.Color;
+                if (other != _selectedConn)
+                {
+                    other.Body.Stroke = ConnStrokeOf(other);
+                    other.Arrow.Fill = ConnStrokeOf(other);
+                }
+            }
+            _lastConnColor = cv.Model.Color;
+            _settings.LastConnColor = _lastConnColor;
+            SettingsStore.Save(_settings);
+            MarkDirty();
+        };
+        connMenu.Items.Add(miAllColor);
 
         var miReverse = new MenuItem { Header = "Reverse direction" };
         miReverse.Click += (s, e) =>
@@ -2213,14 +2328,14 @@ public partial class MainWindow : Window
         return new Point(from.X + dx * t, from.Y + dy * t);
     }
 
-    // ---------- Cell painting ----------
+    // ---------- Zones & legacy painted cells ----------
 
     void PaintToggle_Changed(object sender, RoutedEventArgs e) => UpdateCursor();
 
     static (int, int) CellAt(Point p) =>
         ((int)Math.Floor(p.X / GridSize), (int)Math.Floor(p.Y / GridSize));
 
-    // Low-level cell write; null clears the cell. No undo recording.
+    // Legacy support: boards saved before zones existed contain painted cells.
     void SetCell((int, int) key, CellData? data)
     {
         if (data == null)
@@ -2253,78 +2368,18 @@ public partial class MainWindow : Window
         MarkDirty();
     }
 
-    // Recorded write that feeds the paint-undo stack.
-    void ApplyPaint((int, int) key, CellData? data)
+    void StartZoneDraw(Point at)
     {
-        CellData? before = _cellColors.TryGetValue(key, out var b) ? b : null;
-        if (Nullable.Equals(before, data)) return;
-        _activeOp?.Changes.Add((key, before, data));
-        SetCell(key, data);
-    }
-
-    CellData PaintData() => new(_lastColor, PaintOpacity.Value);
-
-    void BeginPaintOp() => _activeOp = new PaintOp();
-
-    void EndPaintOp()
-    {
-        if (_activeOp != null && _activeOp.Changes.Count > 0)
-        {
-            _paintUndo.Add(_activeOp);
-            if (_paintUndo.Count > 50) _paintUndo.RemoveAt(0);
-        }
-        _activeOp = null;
-        UpdateUndoBtn();
-    }
-
-    void UpdateUndoBtn() => UndoPaintBtn.IsEnabled = _paintUndo.Count > 0;
-
-    void UndoPaint()
-    {
-        if (_paintUndo.Count == 0) return;
-        var op = _paintUndo[^1];
-        _paintUndo.RemoveAt(_paintUndo.Count - 1);
-        for (int i = op.Changes.Count - 1; i >= 0; i--)
-            SetCell(op.Changes[i].Key, op.Changes[i].Before);
-        UpdateUndoBtn();
-    }
-
-    void UndoPaint_Click(object sender, RoutedEventArgs e) => UndoPaint();
-
-    // Fill every cell along the drag segment so fast strokes leave no gaps.
-    void PaintStroke(Point from, Point to, bool erase)
-    {
-        double dist = (to - from).Length;
-        int steps = Math.Max(1, (int)(dist / (GridSize / 2)));
-        CellData? d = erase ? null : PaintData();
-        for (int i = 0; i <= steps; i++)
-        {
-            var p = from + (to - from) * (i / (double)steps);
-            ApplyPaint(CellAt(p), d);
-        }
-    }
-
-    void FillCellArea(Rect r, bool erase)
-    {
-        int cx1 = (int)Math.Floor(r.X / GridSize), cy1 = (int)Math.Floor(r.Y / GridSize);
-        int cx2 = (int)Math.Floor((r.Right - 0.01) / GridSize), cy2 = (int)Math.Floor((r.Bottom - 0.01) / GridSize);
-        CellData? d = erase ? null : PaintData();
-        for (int cx = cx1; cx <= cx2; cx++)
-            for (int cy = cy1; cy <= cy2; cy++)
-                ApplyPaint((cx, cy), d);
-    }
-
-    void StartAreaPaint(Point at, bool erase)
-    {
+        CommitEdit();
+        ClearSelection();
         _areaPainting = true;
-        _areaErase = erase;
         _areaStart = at;
         _areaRect = new Rectangle
         {
             Width = 0, Height = 0,
-            Opacity = erase ? 0.45 : Math.Max(0.2, PaintOpacity.Value * 0.9),
-            Fill = erase ? new SolidColorBrush(Color.FromArgb(0x60, 0x88, 0x88, 0x88)) : BrushFrom(_lastColor),
-            Stroke = erase ? new SolidColorBrush(Color.FromRgb(0xE5, 0x48, 0x4D)) : AccentBrush,
+            Opacity = Math.Max(0.15, PaintOpacity.Value),
+            Fill = BrushFrom(_lastColor),
+            Stroke = AccentBrush,
             StrokeThickness = Math.Max(0.5, 1.5 / _zoom),
             StrokeDashArray = new DoubleCollection { 4, 3 },
             IsHitTestVisible = false
@@ -2336,7 +2391,7 @@ public partial class MainWindow : Window
         World.CaptureMouse();
     }
 
-    void FinishAreaPaint()
+    void FinishZoneDraw()
     {
         _areaPainting = false;
         World.ReleaseMouseCapture();
@@ -2344,41 +2399,41 @@ public partial class MainWindow : Window
         var r = new Rect(Canvas.GetLeft(_areaRect), Canvas.GetTop(_areaRect), _areaRect.Width, _areaRect.Height);
         World.Children.Remove(_areaRect);
         _areaRect = null;
-        _erasePendingStart = false;
-        if (r.Width < 1 && r.Height < 1)
-            ApplyPaint(CellAt(_areaStart), _areaErase ? null : PaintData());
-        else
-            FillCellArea(r, _areaErase);
+        if (r.Width < 8 || r.Height < 8) return;
+
+        // Zones always snap to whole grid cells.
+        double x1 = Math.Floor(r.X / GridSize) * GridSize;
+        double y1 = Math.Floor(r.Y / GridSize) * GridSize;
+        double x2 = Math.Ceiling(r.Right / GridSize) * GridSize;
+        double y2 = Math.Ceiling(r.Bottom / GridSize) * GridSize;
+
+        var m = new NodeModel
+        {
+            Kind = "Zone",
+            Shape = "Rect",
+            Color = _lastColor,
+            Opacity = PaintOpacity.Value,
+            X = x1, Y = y1,
+            W = Math.Max(GridSize * 2, x2 - x1),
+            H = Math.Max(GridSize * 2, y2 - y1)
+        };
+        var nv = CreateNodeVisual(m);
+        SelectOnly(nv);
+        MarkDirty();
     }
 
-    void World_MouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    void PaintOpacity_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-        if (PaintToggle.IsChecked != true || e.OriginalSource != World) return;
-        // Defer: a right-drag erases, but a plain right-click should still
-        // open the canvas context menu, so wait for movement first.
-        _erasePendingStart = true;
-        _erasePressPos = e.GetPosition(World);
-    }
-
-    void World_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
-    {
-        if (_areaPainting && _areaErase)
+        if (_syncingOpacity || _selected == null || _selected.Count == 0) return;
+        bool any = false;
+        foreach (var id in _selected)
         {
-            FinishAreaPaint();
-            EndPaintOp();
-            e.Handled = true;
-            return;
+            if (!_nodes.TryGetValue(id, out var nv) || nv.Model.Kind != "Zone") continue;
+            nv.Model.Opacity = PaintOpacity.Value;
+            nv.ShapeEl.Opacity = nv.Model.Opacity;
+            any = true;
         }
-        if (_erasing)
-        {
-            _erasing = false;
-            World.ReleaseMouseCapture();
-            EndPaintOp();
-            e.Handled = true;
-            return;
-        }
-        // No drag happened: let the context menu open normally.
-        _erasePendingStart = false;
+        if (any) MarkDirty();
     }
 
     // ---------- Canvas interaction ----------
@@ -2391,21 +2446,7 @@ public partial class MainWindow : Window
 
         if (PaintToggle.IsChecked == true)
         {
-            BeginPaintOp();
-            var pp = e.GetPosition(World);
-            if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
-            {
-                // Shift+drag: freehand brush, one cell at a time.
-                _painting = true;
-                _lastPaintWorld = pp;
-                PaintStroke(pp, pp, erase: false);
-                World.CaptureMouse();
-            }
-            else
-            {
-                // Default: drag out a whole area to fill.
-                StartAreaPaint(pp, erase: false);
-            }
+            StartZoneDraw(e.GetPosition(World));
             e.Handled = true;
             return;
         }
@@ -2483,33 +2524,6 @@ public partial class MainWindow : Window
         var p = e.GetPosition(World);
         _lastWorldMouse = p;
 
-        if (_erasePendingStart && (p - _erasePressPos).Length > 4)
-        {
-            // Right-drag confirmed: start erasing instead of showing the menu.
-            _erasePendingStart = false;
-            BeginPaintOp();
-            if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
-            {
-                _erasing = true;
-                _lastPaintWorld = _erasePressPos;
-                PaintStroke(_erasePressPos, p, erase: true);
-                _lastPaintWorld = p;
-                World.CaptureMouse();
-            }
-            else
-            {
-                StartAreaPaint(_erasePressPos, erase: true);
-            }
-            return;
-        }
-
-        if (_painting || _erasing)
-        {
-            PaintStroke(_lastPaintWorld, p, erase: _erasing);
-            _lastPaintWorld = p;
-            return;
-        }
-
         if (_areaPainting && _areaRect != null)
         {
             Canvas.SetLeft(_areaRect, Math.Min(p.X, _areaStart.X));
@@ -2538,19 +2552,9 @@ public partial class MainWindow : Window
 
     void World_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        if (_areaPainting && !_areaErase)
+        if (_areaPainting)
         {
-            FinishAreaPaint();
-            EndPaintOp();
-            e.Handled = true;
-            return;
-        }
-
-        if (_painting)
-        {
-            _painting = false;
-            World.ReleaseMouseCapture();
-            EndPaintOp();
+            FinishZoneDraw();
             e.Handled = true;
             return;
         }
@@ -2768,7 +2772,6 @@ public partial class MainWindow : Window
                 case Key.S: if (shift) SaveAs(); else Save(); e.Handled = true; break;
                 case Key.A: SelectAllNodes(); e.Handled = true; break;
                 case Key.D: DuplicateSelected(); e.Handled = true; break;
-                case Key.Z: UndoPaint(); e.Handled = true; break;
                 case Key.C: CopySelected(); e.Handled = true; break;
                 case Key.X: CutSelected(); e.Handled = true; break;
                 case Key.V: Paste(); e.Handled = true; break;

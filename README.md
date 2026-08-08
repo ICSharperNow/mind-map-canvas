@@ -63,10 +63,9 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
 - **Snap to grid** toggle for tidy layouts, plus **smart alignment guides**: while
   dragging, shapes snap to the edges and centers of nearby shapes on both axes with
   dashed guide lines showing the alignment
-- **Cell painting** (`P` or the Paint button): drag to highlight a whole area of grid
-  cells with the current color - great for zoning the board; Shift+drag for a freehand
-  brush, right-drag to erase (a plain right-click still opens menus), Ctrl+Z (or the
-  ↩ button) to undo, and an **opacity slider** controls how strong new paint is
+- **Zones** (`P` or the ▧ Zone button): drag out a background area that snaps to grid
+  cells - a movable, resizable object behind your shapes for grouping regions of the
+  board; the opacity slider adjusts selected zones live and sets the default for new ones
 
 ### Shapes
 - Nine shapes: **rectangle, pill, ellipse, diamond, hexagon, parallelogram, trapezoid,
@@ -86,8 +85,9 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
 - Drag a dot onto another shape to draw an arrow - while dragging, a ring previews the
   exact dot it will snap to, and the connection **stays pinned to those dots** on both
   ends as the shapes move
-- Right-click an arrow to **recolor it** (presets or the custom picker), reverse its
-  direction, or delete it
+- Right-click an arrow to **recolor it** (presets or the custom picker, applied to one
+  or all connectors), reverse its direction, or delete it; new connections reuse your
+  last connector color
 - Arrows and connector dots hug the true outline of ellipses and diamonds - no floating
   gaps on curved shapes
 - Connector dots, grips, and rotation handles **auto-scale with zoom** so they stay
@@ -106,7 +106,10 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
 
 ### Text
 - Double-click a shape to type; Enter commits, Shift+Enter adds a newline
-- Per-shape **font size, bold, italic, alignment, and text color** via the `Aa` dropdown
+- Per-shape **font family, size, bold, italic, alignment, and text color** via the
+  `Aa Format text` dropdown (eight fonts included)
+- **Text boxes**: lightweight single-line-by-default text objects with optional or
+  transparent backgrounds - same formatting, rotation, resize, and connector support
 
 ### Workflow
 - **Copy / Cut / Paste** (Ctrl+C/X/V) - pastes land under the cursor and keep the
@@ -136,8 +139,9 @@ Requires the .NET 8 SDK. Opening a `.json` board from the command line works too
 | Import image / link | 🖼 / 🔗 toolbar buttons or File menu |
 | Connect shapes | Hover a shape, drag any of its 8 dots onto another shape |
 | Pan | Drag empty canvas, middle-drag, or Space+drag |
-| Paint cells | `P` (or 🖌 Paint), drag = fill area, Shift+drag = brush, right-drag = erase |
-| Undo painting | Ctrl+Z or the ↩ toolbar button |
+| Add zone | `P` (or ▧ Zone), drag an area; snaps to grid cells |
+| Zone opacity | Toolbar slider, live while a zone is selected |
+| Add text box | T Text button, or right-click canvas |
 | Zoom | Mouse wheel, Ctrl +/−, Fit, 100% |
 | Box select | Shift+drag (Ctrl+drag adds to selection) |
 | Toggle select | Ctrl+click |
