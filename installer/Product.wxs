@@ -1,7 +1,7 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
     <Package Name="MindMap Canvas"
              Manufacturer="ICSharperNow"
-             Version="1.0.0"
+             Version="1.0.1"
              UpgradeCode="80298A68-2B8E-4179-B2BD-FC0B5BEA32B8"
              Language="1033"
              Compressed="yes">
@@ -9,8 +9,8 @@
         <MajorUpgrade DowngradeErrorMessage="A newer version of MindMap Canvas is already installed."/>
         <MediaTemplate EmbedCab="yes"/>
 
-        <Icon Id="AppIcon" SourceFile="$(var.AssetsDir)/app.ico"/>
-        <Property Id="ARPPRODUCTICON" Value="AppIcon"/>
+        <Icon Id="AppIcon.exe" SourceFile="$(var.AssetsDir)/app.ico"/>
+        <Property Id="ARPPRODUCTICON" Value="AppIcon.exe"/>
         <Property Id="ARPHELPLINK" Value="https://github.com/ICSharperNow/mind-map-canvas"/>
 
         <StandardDirectory Id="ProgramFiles64Folder">
@@ -26,12 +26,12 @@
                               Directory="ProgramMenuFolder"
                               Name="MindMap Canvas"
                               Description="Mind-mapping board with shapes, connectors, and themes"
-                              Icon="AppIcon"
+                              Icon="AppIcon.exe"
                               Advertise="yes"/>
                     <Shortcut Id="DesktopShortcut"
                               Directory="DesktopFolder"
                               Name="MindMap Canvas"
-                              Icon="AppIcon"
+                              Icon="AppIcon.exe"
                               Advertise="yes"/>
                 </File>
             </Component>
