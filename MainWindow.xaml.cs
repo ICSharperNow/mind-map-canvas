@@ -26,6 +26,20 @@ public class NodeModel
     public string Text { get; set; } = "";
     public string Color { get; set; } = "#FFF9B1";
     public string Shape { get; set; } = "Rect";
+    public double FontSize { get; set; } = 14;
+    public string TextColor { get; set; } = "#2D333A";
+    public string Align { get; set; } = "Center";
+    public bool Bold { get; set; }
+    public bool Italic { get; set; }
+
+    public NodeModel Clone(bool keepId = false) => new()
+    {
+        Id = keepId ? Id : Guid.NewGuid(),
+        X = X, Y = Y, W = W, H = H,
+        Text = Text, Color = Color, Shape = Shape,
+        FontSize = FontSize, TextColor = TextColor, Align = Align,
+        Bold = Bold, Italic = Italic
+    };
 }
 
 public class ConnectionModel
@@ -62,7 +76,7 @@ public class ConnectionVisual
     public Polygon Arrow;
 }
 
-enum Side { Left, Top, Right, Bottom }
+enum Side { Left, Top, Right, Bottom, TopLeft, TopRight, BottomLeft, BottomRight }
 
 public partial class MainWindow : Window
 {
@@ -88,6 +102,12 @@ public partial class MainWindow : Window
         ("Parallelogram", "▱", "Parallelogram"),
     };
 
+    static readonly string[] TextPalette =
+    {
+        "#2D333A", "#FFFFFF", "#6B7280", "#C0392B",
+        "#D97706", "#1D4ED8", "#047857", "#7C3AED"
+    };
+
     static readonly SolidColorBrush AccentBrush = new(Color.FromRgb(0x4C, 0x6E, 0xF5));
     static readonly SolidColorBrush SoftBorderBrush = new(Color.FromArgb(0x30, 0x00, 0x00, 0x00));
     static readonly SolidColorBrush ConnBrush = new(Color.FromRgb(0x88, 0x95, 0xA7));
@@ -99,11 +119,12 @@ public partial class MainWindow : Window
     readonly HashSet<Guid> _selected = new();
     ConnectionVisual _selectedConn;
 
-    bool _spaceDown, _panning, _draggingNodes, _rubberBanding, _movedDuringDrag;
-    Point _panMouseStart, _dragStartWorld, _rubberStart, _lastWorldMouse;
+    bool _spaceDown, _panning, _draggingNodes, _rubberBanding, _movedDuringDrag, _drawingNew;
+    Point _panMouseStart, _dragStartWorld, _rubberStart, _drawStart, _lastWorldMouse;
     double _panXStart, _panYStart;
     readonly Dictionary<Guid, Point> _dragOrigins = new();
-    Rectangle _rubberRect;
+    Rectangle _rubberRect, _drawRect;
+    readonly Dictionary<string, Border> _shapeTiles = new();
 
     NodeVisual _editing;
 
@@ -158,14 +179,68 @@ public partial class MainWindow : Window
         foreach (var def in ShapeDefs)
         {
             var kind = def.Kind;
-            var row = new Button { HorizontalContentAlignment = HorizontalAlignment.Left };
-            row.SetResourceReference(StyleProperty, "ToolBtn");
-            var content = new StackPanel { Orientation = Orientation.Horizontal };
-            content.Children.Add(new TextBlock { Text = def.Icon, Width = 22, TextAlignment = TextAlignment.Center });
-            content.Children.Add(new TextBlock { Text = def.Name, Margin = new Thickness(6, 0, 0, 0) });
-            row.Content = content;
-            row.Click += (s, a) => ChooseShape(kind);
-            ShapeList.Children.Add(row);
+
+            var preview = MakeShapeElement(kind);
+            preview.Effect = null;
+            preview.Width = 46;
+            preview.Height = 30;
+            preview.Fill = new SolidColorBrush(Color.FromRgb(0xB9, 0xC4, 0xD8));
+            preview.Stroke = new SolidColorBrush(Color.FromRgb(0x7A, 0x86, 0x99));
+            preview.StrokeThickness = 1.2;
+            if (preview is Rectangle rr) { rr.RadiusX = 5; rr.RadiusY = 5; }
+
+            var name = new TextBlock
+            {
+                Text = def.Name, FontSize = 11,
+                TextAlignment = TextAlignment.Center,
+                Margin = new Thickness(0, 6, 0, 0)
+            };
+            name.SetResourceReference(TextBlock.ForegroundProperty, "Brush.Text");
+
+            var inner = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+            inner.Children.Add(preview);
+            inner.Children.Add(name);
+
+            var tile = new Border
+            {
+                Width = 104,
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(6, 9, 6, 8),
+                Margin = new Thickness(3),
+                BorderThickness = new Thickness(1.5),
+                BorderBrush = Brushes.Transparent,
+                Background = Brushes.Transparent,
+                Cursor = Cursors.Hand,
+                Child = inner
+            };
+            tile.MouseEnter += (s, a) => { if (_lastShape != kind) tile.SetResourceReference(BackgroundProperty, "Brush.Hover"); };
+            tile.MouseLeave += (s, a) => { if (_lastShape != kind) tile.Background = Brushes.Transparent; };
+            tile.MouseLeftButtonDown += (s, a) => { ChooseShape(kind); a.Handled = true; };
+            _shapeTiles[kind] = tile;
+            ShapeWrap.Children.Add(tile);
+        }
+        RefreshShapeTiles();
+
+        foreach (var hex in TextPalette)
+        {
+            var color = hex;
+            var sw = new Border
+            {
+                Width = 22, Height = 22,
+                CornerRadius = new CornerRadius(6),
+                Background = BrushFrom(color),
+                BorderBrush = SoftBorderBrush,
+                BorderThickness = new Thickness(1),
+                Margin = new Thickness(3),
+                Cursor = Cursors.Hand,
+                ToolTip = color
+            };
+            sw.MouseLeftButtonDown += (s, a) =>
+            {
+                ApplyTextFormat(m => m.TextColor = color);
+                a.Handled = true;
+            };
+            TextColorWrap.Children.Add(sw);
         }
 
         ResetView();
@@ -311,6 +386,8 @@ public partial class MainWindow : Window
         World.Children.Clear();
         _rubberRect = null;
         _rubberBanding = false;
+        _drawRect = null;
+        _drawingNew = false;
         _draggingNodes = false;
     }
 
@@ -337,10 +414,18 @@ public partial class MainWindow : Window
 
     static ControlTemplate CreateGripTemplate()
     {
-        var factory = new FrameworkElementFactory(typeof(Border));
-        factory.SetValue(Border.BackgroundProperty, AccentBrush);
-        factory.SetValue(Border.CornerRadiusProperty, new CornerRadius(2));
-        return new ControlTemplate(typeof(Thumb)) { VisualTree = factory };
+        // Classic diagonal-lines resize glyph instead of a plain square.
+        var path = new FrameworkElementFactory(typeof(System.Windows.Shapes.Path));
+        path.SetValue(System.Windows.Shapes.Path.DataProperty, Geometry.Parse("M11,3 L3,11 M11,7 L7,11"));
+        path.SetValue(Shape.StrokeProperty, new SolidColorBrush(Color.FromArgb(0x8C, 0x00, 0x00, 0x00)));
+        path.SetValue(Shape.StrokeThicknessProperty, 1.6);
+        path.SetValue(Shape.StrokeStartLineCapProperty, PenLineCap.Round);
+        path.SetValue(Shape.StrokeEndLineCapProperty, PenLineCap.Round);
+
+        var root = new FrameworkElementFactory(typeof(Border));
+        root.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+        root.AppendChild(path);
+        return new ControlTemplate(typeof(Thumb)) { VisualTree = root };
     }
 
     static Shape MakeShapeElement(string kind)
@@ -373,10 +458,22 @@ public partial class MainWindow : Window
     void ShapeBtn_Click(object sender, RoutedEventArgs e) =>
         ShapePopup.IsOpen = !ShapePopup.IsOpen;
 
+    void RefreshShapeTiles()
+    {
+        foreach (var (kind, tile) in _shapeTiles)
+        {
+            bool sel = kind == _lastShape;
+            tile.BorderBrush = sel ? AccentBrush : Brushes.Transparent;
+            if (sel) tile.SetResourceReference(BackgroundProperty, "Brush.Checked");
+            else tile.Background = Brushes.Transparent;
+        }
+    }
+
     void ChooseShape(string kind)
     {
         _lastShape = kind;
         ShapeIcon.Text = ShapeDefs.First(d => d.Kind == kind).Icon;
+        RefreshShapeTiles();
         ShapePopup.IsOpen = false;
         bool any = false;
         foreach (var id in _selected)
@@ -430,7 +527,7 @@ public partial class MainWindow : Window
 
         var grip = new Thumb
         {
-            Width = 12, Height = 12,
+            Width = 15, Height = 15,
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Bottom,
             Margin = new Thickness(0, 0, 2, 2),
@@ -495,7 +592,7 @@ public partial class MainWindow : Window
         root.ContextMenu = menu;
         root.ContextMenuOpening += (s, e) => { if (!_selected.Contains(nv.Model.Id)) SelectOnly(nv); };
 
-        RefreshLabel(nv);
+        ApplyTextStyle(nv);
         World.Children.Add(root);
         _nodes[m.Id] = nv;
         return nv;
@@ -526,9 +623,20 @@ public partial class MainWindow : Window
         CreateNoteAt(new Point(wx, wy));
     }
 
+    static TextAlignment AlignOf(string a) => a switch
+    {
+        "Left" => TextAlignment.Left,
+        "Right" => TextAlignment.Right,
+        _ => TextAlignment.Center
+    };
+
     void RefreshLabel(NodeVisual nv)
     {
-        if (string.IsNullOrWhiteSpace(nv.Model.Text))
+        var m = nv.Model;
+        nv.Label.FontSize = m.FontSize;
+        nv.Label.TextAlignment = AlignOf(m.Align);
+        nv.Label.FontWeight = m.Bold ? FontWeights.Bold : FontWeights.Normal;
+        if (string.IsNullOrWhiteSpace(m.Text))
         {
             nv.Label.Text = "Double-click to edit";
             nv.Label.Foreground = PlaceholderBrush;
@@ -536,9 +644,87 @@ public partial class MainWindow : Window
         }
         else
         {
-            nv.Label.Text = nv.Model.Text;
-            nv.Label.Foreground = TextBrush;
-            nv.Label.FontStyle = FontStyles.Normal;
+            nv.Label.Text = m.Text;
+            nv.Label.Foreground = BrushFrom(m.TextColor);
+            nv.Label.FontStyle = m.Italic ? FontStyles.Italic : FontStyles.Normal;
+        }
+    }
+
+    void ApplyTextStyle(NodeVisual nv)
+    {
+        var m = nv.Model;
+        nv.Editor.FontSize = m.FontSize;
+        nv.Editor.TextAlignment = AlignOf(m.Align);
+        nv.Editor.FontWeight = m.Bold ? FontWeights.Bold : FontWeights.Normal;
+        nv.Editor.FontStyle = m.Italic ? FontStyles.Italic : FontStyles.Normal;
+        nv.Editor.Foreground = BrushFrom(m.TextColor);
+        RefreshLabel(nv);
+    }
+
+    // ---------- Text formatting ----------
+
+    void TextBtn_Click(object sender, RoutedEventArgs e)
+    {
+        UpdateFontSizeLabel();
+        TextPopup.IsOpen = !TextPopup.IsOpen;
+    }
+
+    void UpdateFontSizeLabel()
+    {
+        FontSizeLabel.Text = _selected.Count > 0
+            ? Math.Round(_nodes[_selected.First()].Model.FontSize).ToString()
+            : "—";
+    }
+
+    void ApplyTextFormat(Action<NodeModel> change)
+    {
+        if (_selected.Count == 0) return;
+        CommitEdit();
+        foreach (var id in _selected)
+        {
+            change(_nodes[id].Model);
+            ApplyTextStyle(_nodes[id]);
+        }
+        UpdateFontSizeLabel();
+        MarkDirty();
+    }
+
+    void FontMinus_Click(object sender, RoutedEventArgs e) =>
+        ApplyTextFormat(m => m.FontSize = Math.Max(9, m.FontSize - 2));
+
+    void FontPlus_Click(object sender, RoutedEventArgs e) =>
+        ApplyTextFormat(m => m.FontSize = Math.Min(48, m.FontSize + 2));
+
+    void Bold_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selected.Count == 0) return;
+        bool target = !_selected.All(id => _nodes[id].Model.Bold);
+        ApplyTextFormat(m => m.Bold = target);
+    }
+
+    void Italic_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selected.Count == 0) return;
+        bool target = !_selected.All(id => _nodes[id].Model.Italic);
+        ApplyTextFormat(m => m.Italic = target);
+    }
+
+    void AlignLeft_Click(object sender, RoutedEventArgs e) => ApplyTextFormat(m => m.Align = "Left");
+    void AlignCenter_Click(object sender, RoutedEventArgs e) => ApplyTextFormat(m => m.Align = "Center");
+    void AlignRight_Click(object sender, RoutedEventArgs e) => ApplyTextFormat(m => m.Align = "Right");
+
+    void CustomTextColor_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selected.Count == 0) return;
+        TextPopup.IsOpen = false;
+        Color initial;
+        try { initial = (Color)ColorConverter.ConvertFromString(_nodes[_selected.First()].Model.TextColor); }
+        catch { initial = Colors.Black; }
+        var dlg = new ColorPickerWindow(initial) { Owner = this };
+        if (dlg.ShowDialog() == true)
+        {
+            var hex = $"#{dlg.SelectedColor.R:X2}{dlg.SelectedColor.G:X2}{dlg.SelectedColor.B:X2}";
+            ApplyTextFormat(m => m.TextColor = hex);
         }
     }
 
@@ -788,13 +974,9 @@ public partial class MainWindow : Window
         var clones = new List<NodeVisual>();
         foreach (var id in _selected.ToList())
         {
-            var src = _nodes[id].Model;
-            var m = new NodeModel
-            {
-                X = src.X + GridSize, Y = src.Y + GridSize,
-                W = src.W, H = src.H,
-                Text = src.Text, Color = src.Color, Shape = src.Shape
-            };
+            var m = _nodes[id].Model.Clone();
+            m.X += GridSize;
+            m.Y += GridSize;
             map[id] = m.Id;
             clones.Add(CreateNodeVisual(m));
         }
@@ -818,14 +1000,7 @@ public partial class MainWindow : Window
         _clipboardNodes.Clear();
         _clipboardConns.Clear();
         foreach (var id in _selected)
-        {
-            var s = _nodes[id].Model;
-            _clipboardNodes.Add(new NodeModel
-            {
-                Id = s.Id, X = s.X, Y = s.Y, W = s.W, H = s.H,
-                Text = s.Text, Color = s.Color, Shape = s.Shape
-            });
-        }
+            _clipboardNodes.Add(_nodes[id].Model.Clone(keepId: true));
         foreach (var c in _conns)
             if (_selected.Contains(c.Model.From) && _selected.Contains(c.Model.To))
                 _clipboardConns.Add(new ConnectionModel { From = c.Model.From, To = c.Model.To });
@@ -855,13 +1030,10 @@ public partial class MainWindow : Window
         var created = new List<NodeVisual>();
         foreach (var n in _clipboardNodes)
         {
-            double nx = n.X + ox, ny = n.Y + oy;
-            if (snap) { nx = Snap(nx); ny = Snap(ny); }
-            var m = new NodeModel
-            {
-                X = nx, Y = ny, W = n.W, H = n.H,
-                Text = n.Text, Color = n.Color, Shape = n.Shape
-            };
+            var m = n.Clone();
+            m.X = n.X + ox;
+            m.Y = n.Y + oy;
+            if (snap) { m.X = Snap(m.X); m.Y = Snap(m.Y); }
             map[n.Id] = m.Id;
             created.Add(CreateNodeVisual(m));
         }
@@ -916,11 +1088,15 @@ public partial class MainWindow : Window
             Side.Left => (HorizontalAlignment.Left, VerticalAlignment.Center, new Thickness(-7, 0, 0, 0)),
             Side.Right => (HorizontalAlignment.Right, VerticalAlignment.Center, new Thickness(0, 0, -7, 0)),
             Side.Top => (HorizontalAlignment.Center, VerticalAlignment.Top, new Thickness(0, -7, 0, 0)),
-            _ => (HorizontalAlignment.Center, VerticalAlignment.Bottom, new Thickness(0, 0, 0, -7)),
+            Side.Bottom => (HorizontalAlignment.Center, VerticalAlignment.Bottom, new Thickness(0, 0, 0, -7)),
+            Side.TopLeft => (HorizontalAlignment.Left, VerticalAlignment.Top, new Thickness(-7, -7, 0, 0)),
+            Side.TopRight => (HorizontalAlignment.Right, VerticalAlignment.Top, new Thickness(0, -7, -7, 0)),
+            Side.BottomLeft => (HorizontalAlignment.Left, VerticalAlignment.Bottom, new Thickness(-7, 0, 0, -7)),
+            _ => (HorizontalAlignment.Right, VerticalAlignment.Bottom, new Thickness(0, 0, -7, -7)),
         };
         var el = new Ellipse
         {
-            Width = 13, Height = 13,
+            Width = 12, Height = 12,
             Fill = AccentBrush,
             Stroke = Brushes.White,
             StrokeThickness = 1.5,
@@ -951,7 +1127,11 @@ public partial class MainWindow : Window
             Side.Left => new Point(m.X, m.Y + m.H / 2),
             Side.Right => new Point(m.X + m.W, m.Y + m.H / 2),
             Side.Top => new Point(m.X + m.W / 2, m.Y),
-            _ => new Point(m.X + m.W / 2, m.Y + m.H),
+            Side.Bottom => new Point(m.X + m.W / 2, m.Y + m.H),
+            Side.TopLeft => new Point(m.X, m.Y),
+            Side.TopRight => new Point(m.X + m.W, m.Y),
+            Side.BottomLeft => new Point(m.X, m.Y + m.H),
+            _ => new Point(m.X + m.W, m.Y + m.H),
         };
     }
 
@@ -1163,8 +1343,31 @@ public partial class MainWindow : Window
 
         bool ctrl = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
         bool shift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
+        bool alt = (Keyboard.Modifiers & ModifierKeys.Alt) != 0;
 
-        if (shift || ctrl)
+        if (alt)
+        {
+            // Alt+drag draws a new shape at the dragged size.
+            ClearSelection();
+            _drawingNew = true;
+            _drawStart = e.GetPosition(World);
+            _drawRect = new Rectangle
+            {
+                Width = 0, Height = 0,
+                Stroke = AccentBrush,
+                StrokeThickness = Math.Max(0.5, 1.5 / _zoom),
+                Fill = new SolidColorBrush(Color.FromArgb(0x18, 0x4C, 0x6E, 0xF5)),
+                StrokeDashArray = new DoubleCollection { 4, 3 },
+                IsHitTestVisible = false,
+                RadiusX = 6, RadiusY = 6
+            };
+            Canvas.SetLeft(_drawRect, _drawStart.X);
+            Canvas.SetTop(_drawRect, _drawStart.Y);
+            Panel.SetZIndex(_drawRect, 99999);
+            World.Children.Add(_drawRect);
+            World.CaptureMouse();
+        }
+        else if (shift || ctrl)
         {
             // Box select (Ctrl keeps the existing selection).
             if (!ctrl) ClearSelection();
@@ -1211,10 +1414,53 @@ public partial class MainWindow : Window
             _rubberRect.Width = Math.Abs(p.X - _rubberStart.X);
             _rubberRect.Height = Math.Abs(p.Y - _rubberStart.Y);
         }
+
+        if (_drawingNew && _drawRect != null)
+        {
+            Canvas.SetLeft(_drawRect, Math.Min(p.X, _drawStart.X));
+            Canvas.SetTop(_drawRect, Math.Min(p.Y, _drawStart.Y));
+            _drawRect.Width = Math.Abs(p.X - _drawStart.X);
+            _drawRect.Height = Math.Abs(p.Y - _drawStart.Y);
+        }
     }
 
     void World_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
+        if (_drawingNew)
+        {
+            _drawingNew = false;
+            World.ReleaseMouseCapture();
+            if (_drawRect == null) return;
+
+            var dr = new Rect(Canvas.GetLeft(_drawRect), Canvas.GetTop(_drawRect),
+                _drawRect.Width, _drawRect.Height);
+            World.Children.Remove(_drawRect);
+            _drawRect = null;
+
+            if (dr.Width >= 30 && dr.Height >= 24)
+            {
+                var m = new NodeModel
+                {
+                    X = dr.X, Y = dr.Y,
+                    W = Math.Max(NodeMinW, dr.Width),
+                    H = Math.Max(NodeMinH, dr.Height),
+                    Color = _lastColor,
+                    Shape = _lastShape
+                };
+                if (SnapCheck.IsChecked == true)
+                {
+                    m.X = Snap(m.X); m.Y = Snap(m.Y);
+                    m.W = Math.Max(NodeMinW, Snap(m.W));
+                    m.H = Math.Max(NodeMinH, Snap(m.H));
+                }
+                var nv = CreateNodeVisual(m);
+                SelectOnly(nv);
+                MarkDirty();
+            }
+            e.Handled = true;
+            return;
+        }
+
         if (!_rubberBanding) return;
         _rubberBanding = false;
         World.ReleaseMouseCapture();
@@ -1239,6 +1485,14 @@ public partial class MainWindow : Window
     }
 
     // ---------- Pan & zoom ----------
+
+    void Viewport_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        // Keep the same world point centered when the window is resized.
+        if (e.PreviousSize.Width < 1 || e.PreviousSize.Height < 1) return;
+        Pan.X += (e.NewSize.Width - e.PreviousSize.Width) / 2;
+        Pan.Y += (e.NewSize.Height - e.PreviousSize.Height) / 2;
+    }
 
     void Viewport_MouseWheel(object sender, MouseWheelEventArgs e)
     {

@@ -20,13 +20,18 @@ Or open the folder in Visual Studio 2022+ and press F5.
 
 - **Infinite canvas** with a snap grid, smooth zoom (10%–400%), and direct panning —
   just drag the empty canvas in any direction (middle-drag and Space+drag also work)
-- **Shapes**: rectangle, ellipse, diamond, hexagon, parallelogram — pick in the
-  Shape dropdown; double-click the canvas to place one, then drag it into position and
-  double-click it to type (Enter commits, Shift+Enter newline, Esc cancels)
-- **Move & resize**: drag shapes (grid snapping optional), resize via the corner grip
-- **Connections**: hover a shape and drag one of the four side connector dots onto another
-  shape to draw an arrow (arrows hug the true outline of ellipses and diamonds);
-  click an arrow to select it, `Del` to remove
+- **Shapes**: rectangle, ellipse, diamond, hexagon, parallelogram — pick from the visual
+  Shape gallery; double-click the canvas to place one at default size, or Alt+drag to draw
+  one at exactly the size you want, then double-click it to type
+  (Enter commits, Shift+Enter newline, Esc cancels)
+- **Text formatting** (Aa dropdown): font size, bold, italic, left/center/right alignment,
+  and text color (8 presets plus the custom picker) — applies to every selected shape
+- **Move & resize**: drag shapes (grid snapping optional), resize via the corner
+  resize-icon grip
+- **Connections**: hover a shape and drag any of its eight connector dots (side midpoints
+  and corners) onto another shape to draw an arrow (arrows hug the true outline of
+  ellipses and diamonds); click an arrow to select it, `Del` to remove
+- **Stable view**: resizing the window keeps the board centered on the same spot
 - **Copy / paste**: Ctrl+C / Ctrl+X / Ctrl+V (pastes under the cursor), plus context menu
 - **Multi-select**: Shift+drag a box on empty canvas (Ctrl+drag keeps existing selection),
   Ctrl+click to toggle, Ctrl+A for all
@@ -45,6 +50,8 @@ Or open the folder in Visual Studio 2022+ and press F5.
 | Action | Input |
 |---|---|
 | Add shape | Double-click canvas, or ＋ Note button |
+| Draw shape to size | Alt+drag on empty canvas |
+| Format text | Aa dropdown with shapes selected |
 | Edit shape text | Double-click shape |
 | Move shape(s) | Drag |
 | Resize shape | Drag bottom-right grip (visible when selected) |

@@ -97,7 +97,53 @@
                         <Border.Effect>
                             <DropShadowEffect BlurRadius="18" ShadowDepth="3" Opacity="0.30"/>
                         </Border.Effect>
-                        <StackPanel x:Name="ShapeList" MinWidth="150"/>
+                        <WrapPanel x:Name="ShapeWrap" Width="240"/>
+                    </Border>
+                </Popup>
+
+                <Button x:Name="TextBtn" Style="{StaticResource ToolBtn}" Click="TextBtn_Click"
+                        ToolTip="Text formatting (applies to selected shapes)">
+                    <TextBlock VerticalAlignment="Center"><Run Text="Aa"/><Run Text=" ▾"/></TextBlock>
+                </Button>
+                <Popup x:Name="TextPopup" PlacementTarget="{Binding ElementName=TextBtn}" Placement="Bottom"
+                       StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+                    <Border Background="{DynamicResource Brush.PanelBg}"
+                            BorderBrush="{DynamicResource Brush.PanelBorder}"
+                            BorderThickness="1" CornerRadius="10" Padding="12" Margin="10">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="18" ShadowDepth="3" Opacity="0.30"/>
+                        </Border.Effect>
+                        <StackPanel MinWidth="224">
+                            <TextBlock Text="SIZE AND STYLE" FontSize="10" FontWeight="SemiBold" Opacity="0.8"
+                                       Foreground="{DynamicResource Brush.SubtleText}"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,4,0,10">
+                                <Button Style="{StaticResource ToolBtn}" Width="34" Padding="0,5" Content="A−" Click="FontMinus_Click" ToolTip="Smaller text"/>
+                                <TextBlock x:Name="FontSizeLabel" Text="14" Width="34" TextAlignment="Center" VerticalAlignment="Center"
+                                           FontSize="13" Foreground="{DynamicResource Brush.Text}"/>
+                                <Button Style="{StaticResource ToolBtn}" Width="34" Padding="0,5" Content="A+" Click="FontPlus_Click" ToolTip="Larger text"/>
+                                <Border Width="1" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
+                                <Button Style="{StaticResource ToolBtn}" Width="32" Padding="0,5" FontWeight="Bold" Content="B" Click="Bold_Click" ToolTip="Bold"/>
+                                <Button Style="{StaticResource ToolBtn}" Width="32" Padding="0,5" FontStyle="Italic" Content="I" Click="Italic_Click" ToolTip="Italic"/>
+                            </StackPanel>
+                            <TextBlock Text="ALIGNMENT" FontSize="10" FontWeight="SemiBold" Opacity="0.8"
+                                       Foreground="{DynamicResource Brush.SubtleText}"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,4,0,10">
+                                <Button Style="{StaticResource ToolBtn}" Width="36" Padding="0,6" Click="AlignLeft_Click" ToolTip="Align left">
+                                    <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE8E4;" FontSize="14"/>
+                                </Button>
+                                <Button Style="{StaticResource ToolBtn}" Width="36" Padding="0,6" Click="AlignCenter_Click" ToolTip="Align center">
+                                    <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE8E3;" FontSize="14"/>
+                                </Button>
+                                <Button Style="{StaticResource ToolBtn}" Width="36" Padding="0,6" Click="AlignRight_Click" ToolTip="Align right">
+                                    <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE8E2;" FontSize="14"/>
+                                </Button>
+                            </StackPanel>
+                            <TextBlock Text="TEXT COLOR" FontSize="10" FontWeight="SemiBold" Opacity="0.8"
+                                       Foreground="{DynamicResource Brush.SubtleText}"/>
+                            <WrapPanel x:Name="TextColorWrap" Width="224" Margin="0,4,0,0"/>
+                            <Button Content="Custom text color…" Style="{StaticResource ToolBtn}" Margin="0,6,0,0"
+                                    HorizontalContentAlignment="Center" Click="CustomTextColor_Click"/>
+                        </StackPanel>
                     </Border>
                 </Popup>
                 <Border Width="1" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
@@ -122,11 +168,12 @@
         <Border DockPanel.Dock="Bottom" Background="{DynamicResource Brush.PanelBg}"
                 BorderBrush="{DynamicResource Brush.PanelBorder}" BorderThickness="0,1,0,0" Padding="10,4">
             <TextBlock FontSize="12" Foreground="{DynamicResource Brush.SubtleText}"
-                       Text="Double-click canvas: add shape  •  Drag canvas: pan  •  Shift+drag canvas: box-select  •  Double-click shape: edit  •  Hover shape + drag side dot: connect  •  Wheel: zoom  •  Ctrl+C/X/V: copy/cut/paste  •  Del: delete"/>
+                       Text="Double-click canvas: add shape  •  Alt+drag canvas: draw shape to size  •  Drag canvas: pan  •  Shift+drag: box-select  •  Double-click shape: edit  •  Drag a dot: connect  •  Wheel: zoom  •  Ctrl+C/X/V: copy/cut/paste"/>
         </Border>
 
         <!-- Board -->
         <Grid x:Name="Viewport" ClipToBounds="True" Background="{DynamicResource Brush.CanvasOuter}"
+              SizeChanged="Viewport_SizeChanged"
               MouseWheel="Viewport_MouseWheel"
               PreviewMouseDown="Viewport_PreviewMouseDown"
               MouseMove="Viewport_MouseMove"
