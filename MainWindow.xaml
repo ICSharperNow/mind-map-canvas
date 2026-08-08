@@ -56,18 +56,18 @@
 
         <!-- Toolbar -->
         <Border DockPanel.Dock="Top" Background="{DynamicResource Brush.PanelBg}"
-                BorderBrush="{DynamicResource Brush.PanelBorder}" BorderThickness="0,0,0,1" Padding="8,6">
-            <StackPanel Orientation="Horizontal">
+                BorderBrush="{DynamicResource Brush.PanelBorder}" BorderThickness="0,0,0,1" Padding="8,4">
+            <WrapPanel VerticalAlignment="Center">
                 <Button Style="{StaticResource ToolBtn}" Click="New_Click" Content="New" ToolTip="New board (Ctrl+N)"/>
                 <Button Style="{StaticResource ToolBtn}" Click="Open_Click" Content="Open…" ToolTip="Open board (Ctrl+O)"/>
                 <Button Style="{StaticResource ToolBtn}" Click="Save_Click" Content="Save" ToolTip="Save board (Ctrl+S / Ctrl+Shift+S)"/>
-                <Border Width="1" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
+                <Border Width="1" Height="26" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
 
                 <Button Style="{StaticResource ToolBtn}" Click="AddNote_Click" Content="＋ Note" ToolTip="Add a sticky note (or double-click the canvas)"/>
                 <Button Style="{StaticResource ToolBtn}" Click="ImportImage_Click" Content="🖼 Image" ToolTip="Import an image onto the board"/>
                 <Button Style="{StaticResource ToolBtn}" Click="ImportLink_Click" Content="🔗 Link" ToolTip="Add a web link with a live page preview"/>
                 <Button Style="{StaticResource ToolBtn}" Click="Delete_Click" Content="🗑 Delete" ToolTip="Delete selection (Del)"/>
-                <Border Width="1" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
+                <Border Width="1" Height="26" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
 
                 <Button x:Name="ColorBtn" Style="{StaticResource ToolBtn}" Click="ColorBtn_Click" ToolTip="Note color">
                     <StackPanel Orientation="Horizontal">
@@ -109,7 +109,7 @@
                 <Slider x:Name="PaintOpacity" Width="70" Minimum="0.15" Maximum="1" Value="0.5"
                         VerticalAlignment="Center" Margin="4,0,0,0"
                         ToolTip="Paint opacity for newly painted cells"/>
-                <Border Width="1" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
+                <Border Width="1" Height="26" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
 
                 <Button x:Name="ShapeBtn" Style="{StaticResource ToolBtn}" Click="ShapeBtn_Click"
                         ToolTip="Shape for new notes (also applies to selection)">
@@ -185,11 +185,11 @@
                         </StackPanel>
                     </Border>
                 </Popup>
-                <Border Width="1" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
+                <Border Width="1" Height="26" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
 
                 <CheckBox x:Name="SnapCheck" Content="Snap to grid" IsChecked="True" VerticalAlignment="Center"
                           Margin="4,0" FontSize="13" Foreground="{DynamicResource Brush.Text}"/>
-                <Border Width="1" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
+                <Border Width="1" Height="26" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
 
                 <Button Style="{StaticResource ToolBtn}" Click="ZoomOut_Click" Content="−" Width="32" Padding="0,6" ToolTip="Zoom out (Ctrl+-)"/>
                 <TextBlock x:Name="ZoomLabel" Text="100%" Width="46" TextAlignment="Center" VerticalAlignment="Center"
@@ -197,7 +197,7 @@
                 <Button Style="{StaticResource ToolBtn}" Click="ZoomIn_Click" Content="＋" Width="32" Padding="0,6" Margin="2,0,6,0" ToolTip="Zoom in (Ctrl++)"/>
                 <Button Style="{StaticResource ToolBtn}" Click="Fit_Click" Content="Fit" ToolTip="Zoom to fit all notes"/>
                 <Button Style="{StaticResource ToolBtn}" Click="Zoom100_Click" Content="100%" ToolTip="Reset zoom (Ctrl+0)"/>
-                <Border Width="1" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
+                <Border Width="1" Height="26" Background="{DynamicResource Brush.PanelBorder}" Margin="8,2"/>
 
                 <Button x:Name="ExportBtn" Style="{StaticResource ToolBtn}" Click="ExportBtn_Click"
                         Content="Export as ▾" ToolTip="Export the board as an image or PDF"/>
@@ -218,7 +218,7 @@
                         </StackPanel>
                     </Border>
                 </Popup>
-            </StackPanel>
+            </WrapPanel>
         </Border>
 
         <!-- Status bar -->
