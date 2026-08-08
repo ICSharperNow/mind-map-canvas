@@ -2160,24 +2160,29 @@ public partial class MainWindow : Window
 
     void ApplyConnColor(ConnectionVisual cv, string hex, bool all)
     {
-        if (!all)
+        if (all)
+        {
+            foreach (var other in _conns)
+            {
+                other.Model.Color = hex;
+                if (other != _selectedConn)
+                {
+                    other.Body.Stroke = ConnStrokeOf(other);
+                    other.Arrow.Fill = ConnStrokeOf(other);
+                }
+            }
+            _lastConnColor = hex;
+            _settings.LastConnColor = hex;
+            SettingsStore.Save(_settings);
+            MarkDirty();
+        }
+        else
         {
             SetConnColor(cv, hex);
-            return;
         }
-        foreach (var other in _conns)
-        {
-            other.Model.Color = hex;
-            if (other != _selectedConn)
-            {
-                other.Body.Stroke = ConnStrokeOf(other);
-                other.Arrow.Fill = ConnStrokeOf(other);
-            }
-        }
-        _lastConnColor = hex;
-        _settings.LastConnColor = hex;
-        SettingsStore.Save(_settings);
-        MarkDirty();
+        // Deselect so the new color is visible immediately instead of the
+        // selection highlight.
+        ClearConnSelection();
     }
 
     void SetConnColor(ConnectionVisual cv, string hex)

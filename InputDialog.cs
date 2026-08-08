@@ -102,6 +102,10 @@ public class InputDialog : Window
             _box.Focus();
             _box.CaretIndex = _box.Text.Length;
             _box.ScrollToHome();
+            // Align the ghost text exactly with the real caret position.
+            var caretRect = _box.GetRectFromCharacterIndex(0);
+            if (!double.IsInfinity(caretRect.X) && caretRect.X >= 0)
+                hint.Margin = new Thickness(caretRect.X + 1, 0, 0, 0);
         };
     }
 
