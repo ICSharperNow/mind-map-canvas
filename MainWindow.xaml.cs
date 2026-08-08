@@ -34,6 +34,7 @@ public class NodeModel
     public bool Bold { get; set; }
     public bool Italic { get; set; }
     public double Rotation { get; set; }
+    public int Z { get; set; }
     public double Opacity { get; set; } = 1.0;
     public string Font { get; set; } = "Segoe UI";
     public string Kind { get; set; } = "Shape";   // Shape | Image | Link | Zone | Text
@@ -190,6 +191,7 @@ public partial class MainWindow : Window
     bool _dirty;
     double _zoom = 1.0;
     int _zTop = 10;
+    int _zBottom;
     string _lastColor = "#FFF9B1";
     string _lastShape = "Rect";
 
@@ -489,6 +491,8 @@ public partial class MainWindow : Window
     {
         try
         {
+            foreach (var nv in _nodes.Values)
+                nv.Model.Z = Panel.GetZIndex(nv.Root);
             var doc = new DocumentModel
             {
                 Nodes = _nodes.Values.Select(n => n.Model).ToList(),
@@ -887,8 +891,11 @@ public partial class MainWindow : Window
 
         Canvas.SetLeft(root, m.X);
         Canvas.SetTop(root, m.Y);
-        // Zones live behind connections and shapes.
-        Panel.SetZIndex(root, m.Kind == "Zone" ? 1 : ++_zTop);
+        // Zones live behind connections and shapes; saved boards restore layering.
+        int z = m.Z != 0 ? m.Z : (m.Kind == "Zone" ? 1 : ++_zTop);
+        if (m.Z > _zTop) _zTop = m.Z;
+        if (m.Z < _zBottom) _zBottom = m.Z;
+        Panel.SetZIndex(root, z);
 
         var nv = new NodeVisual
         {
@@ -982,12 +989,29 @@ public partial class MainWindow : Window
         miCopy.Click += (s, e) => { if (!_selected.Contains(nv.Model.Id)) SelectOnly(nv); CopySelected(); };
         var miCut = new MenuItem { Header = "Cut", InputGestureText = "Ctrl+X" };
         miCut.Click += (s, e) => { if (!_selected.Contains(nv.Model.Id)) SelectOnly(nv); CutSelected(); };
+        var miFront = new MenuItem { Header = "Bring to front" };
+        miFront.Click += (s, e) =>
+        {
+            Panel.SetZIndex(nv.Root, ++_zTop);
+            nv.Model.Z = _zTop;
+            MarkDirty();
+        };
+        var miBack = new MenuItem { Header = "Send to back" };
+        miBack.Click += (s, e) =>
+        {
+            Panel.SetZIndex(nv.Root, --_zBottom);
+            nv.Model.Z = _zBottom;
+            MarkDirty();
+        };
         var miDel = new MenuItem { Header = "Delete", InputGestureText = "Del" };
         miDel.Click += (s, e) => { if (!_selected.Contains(nv.Model.Id)) SelectOnly(nv); DeleteSelected(); };
         menu.Items.Add(miEdit);
         menu.Items.Add(miDup);
         menu.Items.Add(miCopy);
         menu.Items.Add(miCut);
+        menu.Items.Add(new Separator());
+        menu.Items.Add(miFront);
+        menu.Items.Add(miBack);
         menu.Items.Add(new Separator());
         menu.Items.Add(miDel);
         root.ContextMenu = menu;
@@ -1279,19 +1303,21 @@ public partial class MainWindow : Window
 
     void UpdateFontSizeLabel()
     {
-        FontSizeLabel.Text = _selected.Count > 0
-            ? Math.Round(_nodes[_selected.First()].Model.FontSize).ToString()
+        FontSizeLabel.Text = _selected.Count > 0 && _nodes.TryGetValue(_selected.First(), out var nv)
+            ? Math.Round(nv.Model.FontSize).ToString()
             : "-";
     }
 
     void ApplyTextFormat(Action<NodeModel> change)
     {
         if (_selected.Count == 0) return;
-        CommitEdit();
         foreach (var id in _selected)
         {
-            change(_nodes[id].Model);
-            ApplyTextStyle(_nodes[id]);
+            if (!_nodes.TryGetValue(id, out var nv)) continue;
+            change(nv.Model);
+            // Styles hit both the label and the live editor, so formatting works
+            // mid-edit and on every object kind.
+            ApplyTextStyle(nv);
         }
         UpdateFontSizeLabel();
         MarkDirty();
@@ -1602,7 +1628,11 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (nv.Model.Kind != "Zone") Panel.SetZIndex(nv.Root, ++_zTop);
+        if (nv.Model.Kind != "Zone")
+        {
+            Panel.SetZIndex(nv.Root, ++_zTop);
+            nv.Model.Z = _zTop;
+        }
         bool ctrl = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
         if (ctrl) ToggleSelect(nv);
         else if (!_selected.Contains(nv.Model.Id)) SelectOnly(nv);
@@ -1995,7 +2025,7 @@ public partial class MainWindow : Window
     static Point SideAnchorLocal(NodeModel m, Side side)
     {
         var raw = SideAnchorRaw(m, side);
-        if (m.Shape == "Ellipse" || m.Shape == "Diamond")
+        if (m.Shape == "Ellipse" || ShapeOutlines.ContainsKey(m.Shape))
             return EdgePointLocal(m, CenterOf(m), raw);
         return raw;
     }
@@ -2357,9 +2387,21 @@ public partial class MainWindow : Window
         cv.Arrow.Points = new PointCollection { p2, tail + perp * 5, tail - perp * 5 };
     }
 
-    // Arrows land on the actual shape outline for ellipses and diamonds,
-    // and on the bounding box for the rest. Rotation is handled by working
-    // in the node's local (unrotated) space and rotating the result back.
+    // Unit-space outlines for the polygon shapes, mirroring MakeShapeElement.
+    static readonly Dictionary<string, Point[]> ShapeOutlines = new()
+    {
+        ["Diamond"] = new[] { new Point(0.5, 0), new Point(1, 0.5), new Point(0.5, 1), new Point(0, 0.5) },
+        ["Hexagon"] = new[] { new Point(0.25, 0), new Point(0.75, 0), new Point(1, 0.5), new Point(0.75, 1), new Point(0.25, 1), new Point(0, 0.5) },
+        ["Parallelogram"] = new[] { new Point(0.2, 0), new Point(1, 0), new Point(0.8, 1), new Point(0, 1) },
+        ["Triangle"] = new[] { new Point(0.5, 0), new Point(1, 1), new Point(0, 1) },
+        ["Trapezoid"] = new[] { new Point(0.22, 0), new Point(0.78, 0), new Point(1, 1), new Point(0, 1) },
+        ["Octagon"] = new[] { new Point(0.3, 0), new Point(0.7, 0), new Point(1, 0.3), new Point(1, 0.7), new Point(0.7, 1), new Point(0.3, 1), new Point(0, 0.7), new Point(0, 0.3) },
+    };
+
+    // Arrows and connector dots land on the actual shape outline for every
+    // curved/polygonal shape, and on the bounding box for rectangles and pills.
+    // Rotation is handled by working in the node's local (unrotated) space and
+    // rotating the result back.
     static Point EdgePointFor(NodeModel m, Point from, Point to)
     {
         var c = CenterOf(m);
@@ -2372,20 +2414,35 @@ public partial class MainWindow : Window
     {
         double dx = to.X - from.X, dy = to.Y - from.Y;
         if (Math.Abs(dx) < 1e-9 && Math.Abs(dy) < 1e-9) return from;
-        double hw = m.W / 2, hh = m.H / 2;
-        double t;
-        switch (m.Shape)
+
+        if (m.Shape == "Ellipse")
         {
-            case "Ellipse":
-                t = 1 / Math.Sqrt(dx * dx / (hw * hw) + dy * dy / (hh * hh));
-                break;
-            case "Diamond":
-                t = 1 / (Math.Abs(dx) / hw + Math.Abs(dy) / hh);
-                break;
-            default:
-                return EdgeIntersect(new Rect(m.X, m.Y, m.W, m.H), from, to);
+            double hw = m.W / 2, hh = m.H / 2;
+            double te = 1 / Math.Sqrt(dx * dx / (hw * hw) + dy * dy / (hh * hh));
+            return new Point(from.X + dx * te, from.Y + dy * te);
         }
-        return new Point(from.X + dx * t, from.Y + dy * t);
+
+        if (ShapeOutlines.TryGetValue(m.Shape, out var unit))
+        {
+            // Ray from the center against each polygon edge.
+            double best = double.PositiveInfinity;
+            for (int i = 0; i < unit.Length; i++)
+            {
+                var p1 = new Point(m.X + unit[i].X * m.W, m.Y + unit[i].Y * m.H);
+                var u2 = unit[(i + 1) % unit.Length];
+                var p2 = new Point(m.X + u2.X * m.W, m.Y + u2.Y * m.H);
+                double ex = p2.X - p1.X, ey = p2.Y - p1.Y;
+                double denom = dx * ey - dy * ex;
+                if (Math.Abs(denom) < 1e-9) continue;
+                double t = ((p1.X - from.X) * ey - (p1.Y - from.Y) * ex) / denom;
+                double s = ((p1.X - from.X) * dy - (p1.Y - from.Y) * dx) / denom;
+                if (t > 0 && s >= -0.001 && s <= 1.001 && t < best) best = t;
+            }
+            if (!double.IsPositiveInfinity(best))
+                return new Point(from.X + dx * best, from.Y + dy * best);
+        }
+
+        return EdgeIntersect(new Rect(m.X, m.Y, m.W, m.H), from, to);
     }
 
     static Point EdgeIntersect(Rect r, Point from, Point to)
